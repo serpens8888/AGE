@@ -6,4 +6,5 @@
 *.elf
 *.o
 *.bin
+*.pdb
 
