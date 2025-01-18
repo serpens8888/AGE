@@ -3,3 +3,6 @@
 - artificial general engine
 - agriculture engine
 
+
+dependencies - vulkan, sdl2
+

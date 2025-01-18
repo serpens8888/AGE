@@ -28,6 +28,7 @@ create_instance :: proc(ctx: ^vk_context){
 	app_info.apiVersion = vk.MAKE_VERSION(1,3,0)
 
 	requested_extensions: [dynamic]cstring
+	defer delete(requested_extensions)
 
 	append(&requested_extensions, "VK_KHR_surface")
 	when ODIN_OS == .Windows{append(&requested_extensions, "VK_KHR_win32_surface") }
@@ -47,7 +48,7 @@ create_instance :: proc(ctx: ^vk_context){
 		for layer in available_layers {
 			layer_name := layer.layerName
 			layer_str := (string(layer_name[0:256]))
-			layer_map[cstring(strings.clone_to_cstring(layer_str))] = true
+			layer_map[cstring(strings.clone_to_cstring(layer_str, context.temp_allocator))] = true
 		}
 
 		for layer in requested_layers {
@@ -66,7 +67,7 @@ create_instance :: proc(ctx: ^vk_context){
 	for ext in available_extensions{
 		ext_name := ext.extensionName
 		ext_str := string(ext_name[0:256])
-		extension_map[cstring(strings.clone_to_cstring(ext_str))] = true
+		extension_map[cstring(strings.clone_to_cstring(ext_str, context.temp_allocator))] = true
 	}
 
 	for ext in requested_extensions{

@@ -212,14 +212,14 @@ pick_gpu :: proc(gpus: []vk.PhysicalDevice, ctx: vk_context) -> vk.PhysicalDevic
 		ext_map:map[cstring]bool
 		defer delete(ext_map)
 
-
 		for ext in exts{
 			ext_name := ext.extensionName
 			ext_str := string(ext_name[0:256])
-			ext_map[cstring(strings.clone_to_cstring(ext_str))] = true
+			ext_map[cstring(strings.clone_to_cstring(ext_str, context.temp_allocator))] = true
 		}
+		defer free_all(context.temp_allocator)
 
-		requested_exts :[]cstring = {"VK_KHR_swapchain", "VK_EXT_shader_object", "VK_EXT_descriptor_buffer", "VK_AMD_device_coherent_memory"}
+		requested_exts :[]cstring = {"VK_KHR_swapchain", "VK_KHR_dynamic_rendering", "VK_EXT_shader_object", "VK_EXT_descriptor_buffer", "VK_AMD_device_coherent_memory"}
 
 		
 		for ext in requested_exts{
@@ -351,6 +351,7 @@ create_device :: proc(ctx: ^vk_context){
 	for i in 0..<len(queue_cis){
 		//create priority array that is 1.0 for all queues in family (I dont care about priority that much)
 		priorities : []f32 = make([]f32, qf_map[qfs[i]])
+		defer delete(priorities)
 		for i in 0..<len(priorities){
 			priorities[i] = 1.0	
 		}
@@ -368,6 +369,10 @@ create_device :: proc(ctx: ^vk_context){
 	physical_device_features2: vk.PhysicalDeviceFeatures2 = {
 		sType = .PHYSICAL_DEVICE_FEATURES_2
 	}
+	dynamic_rendering: vk.PhysicalDeviceDynamicRenderingFeaturesKHR = {
+		sType = .PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR,
+		dynamicRendering = true
+	}
 	shader_obj: vk.PhysicalDeviceShaderObjectFeaturesEXT = {
 		sType = .PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT,
 		shaderObject = true,
@@ -381,12 +386,13 @@ create_device :: proc(ctx: ^vk_context){
 		deviceCoherentMemory = true
 	}
 
-	physical_device_features2.pNext = &shader_obj;
-	shader_obj.pNext = &desc_buf;
+	physical_device_features2.pNext = &dynamic_rendering
+	dynamic_rendering.pNext = &shader_obj
+	shader_obj.pNext = &desc_buf
 	desc_buf.pNext = &coherent_memory;
 
 
-	device_exts :[]cstring = {"VK_KHR_swapchain", "VK_EXT_shader_object", "VK_EXT_descriptor_buffer", "VK_AMD_device_coherent_memory"}
+	device_exts :[]cstring = {"VK_KHR_swapchain", "VK_KHR_dynamic_rendering", "VK_EXT_shader_object", "VK_EXT_descriptor_buffer", "VK_AMD_device_coherent_memory"}
 	
 	device_ci: vk.DeviceCreateInfo = {
 		sType = .DEVICE_CREATE_INFO,

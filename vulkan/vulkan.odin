@@ -92,7 +92,9 @@ init_context :: proc(ctx: ^vk_context){
 deinit_context :: proc(ctx: ^vk_context){
 	vk.DestroySwapchainKHR(ctx.device, ctx.display.swapchain, nil)
 	for view in ctx.display.swapchain_image_views{ vk.DestroyImageView(ctx.device, view, nil) }
+	delete(ctx.display.swapchain_image_views)
 	delete(ctx.display.swapchain_images)
+
 
 	vk.DestroyCommandPool(ctx.device, ctx.queues.pools.graphics, nil)
 	vk.DestroyCommandPool(ctx.device, ctx.queues.pools.compute, nil)
