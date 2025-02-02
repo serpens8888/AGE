@@ -72,7 +72,7 @@ init_context :: proc(ctx: ^vk_context){
 	result := sdl.Init({.VIDEO})
 	assert(result == 0)
 
-	ctx.display.window = sdl.CreateWindow("window", sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, 640, 480, {.VULKAN, .RESIZABLE} )
+	ctx.display.window = sdl.CreateWindow("window", sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, 1920, 1080, {.VULKAN, .RESIZABLE} )
 
 	load_vulkan()
 	create_instance(ctx)

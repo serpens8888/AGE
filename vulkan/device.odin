@@ -19,8 +19,8 @@ select_queues :: proc(gpu: vk.PhysicalDevice, surface: vk.SurfaceKHR) -> queue_f
 	distinct_compute:bool = false
 	distinct_transfer:bool = false
 	distinct_sparse:bool = false
-
-	/*for family, index in queue_families{
+	/*
+	for family, index in queue_families{
 		present_support:b32=false
 		vk.GetPhysicalDeviceSurfaceSupportKHR(gpu, u32(index), surface, &present_support)
 		if(present_support == true && .GRAPHICS in family.queueFlags){
@@ -30,7 +30,8 @@ select_queues :: proc(gpu: vk.PhysicalDevice, surface: vk.SurfaceKHR) -> queue_f
 			indices.graphics_idx = 0
 			break
 		}
-	}*/
+	}
+	*/
 
 	//select 0,0 for graphics, and another family for present. this will probably run on all gpus, but on nvidias might double up graphics and present
 
@@ -59,6 +60,7 @@ select_queues :: proc(gpu: vk.PhysicalDevice, surface: vk.SurfaceKHR) -> queue_f
 		}
 	}
 	indices.present_idx = 0
+	
 
 	
 	//select compute queue

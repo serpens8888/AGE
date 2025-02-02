@@ -129,6 +129,37 @@ create_swapchain :: proc(ctx: ^vk_context){
 	return
 }
 
+recreate_swapchain :: proc(ctx: ^vk_context){
+	event: sdl.Event
+	w: i32 = 0
+	h: i32 = 0
+
+	sdl.GetWindowSize(ctx.display.window, &w, &h)
+
+	for true{
+		//if window is minimized just spin on the rendering thread(s)
+		flags := sdl.GetWindowFlags(ctx.display.window)
+		if(flags & u32(sdl.WINDOW_MINIMIZED) == 0){
+			break
+		}
+
+		if(sdl.WaitEvent(&event)){
+			#partial switch event.window.event {
+				case .RESTORED: break
+			}
+		}
+	}
+
+	vk.DeviceWaitIdle(ctx.device)
+
+	vk.DestroySwapchainKHR(ctx.device, ctx.display.swapchain, nil)
+	for view in ctx.display.swapchain_image_views{ vk.DestroyImageView(ctx.device, view, nil) }
+	delete(ctx.display.swapchain_image_views)
+	delete(ctx.display.swapchain_images)
+	
+	create_swapchain(ctx)
+}
+
 
 
 

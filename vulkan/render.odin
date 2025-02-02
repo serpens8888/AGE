@@ -40,38 +40,6 @@ deinit_render_state :: proc(render_state: ^render_loop_state, device: vk.Device)
 }
 
 
-render_frame :: proc(ctx: ^vk_context, state: ^render_loop_state){
-	vk.WaitForFences(ctx.device, 1, &state.in_flight_fences[state.current_frame], true, max(u64))
-	vk.ResetFences(ctx.device, 1, &state.in_flight_fences[state.current_frame])
-
-	/*
-	image_index: u32
-	result := vk.AcquireNextImageKHR(ctx.device, ctx.display.swapchain, max(u64),
-	   								 state.image_available_semaphores[state.current_frame],
-									 {}, &image_index);
-
-	assert(result != .ERROR_OUT_OF_DATE_KHR)
-	
-	//submit info and queue submission, presentation failes unless something is submitted to a queue
-
-	present_info: vk.PresentInfoKHR = {
-		sType = .PRESENT_INFO_KHR,
-		waitSemaphoreCount = 1,
-		pWaitSemaphores = &state.render_finished_semaphores[state.current_frame],
-		swapchainCount = 1,
-		pSwapchains = &ctx.display.swapchain,
-		pImageIndices = &image_index,
-		pResults = nil
-	}
-
-	result = vk.QueuePresentKHR(ctx.queues.present_queue, &present_info)
-
-	state.current_frame = (state.current_frame + 1) % state.frames_in_flight
-*/
-
-}
-
-
 
 
 

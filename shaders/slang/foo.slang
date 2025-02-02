@@ -5,7 +5,7 @@ struct v_in{
 
 
 struct v_out {
-	float4 position : SV_Position;
+	float4 pos : SV_Position;
 	float2 uv;
 	
 };
@@ -15,7 +15,7 @@ v_out vertexMain(v_in input, uint vertexID : SV_VertexID){
 	
 	v_out output;
 
-	output.position = float4(input.position, 0.0, 1.0);
+	output.pos = float4(input.position, 0.0, 1.0);
 	output.uv = input.uv;
 
 
@@ -23,13 +23,22 @@ v_out vertexMain(v_in input, uint vertexID : SV_VertexID){
 
 
 }
+static const float pi = 3.1415926535;
 
 [shader("fragment")]
 float4 fragmentMain(in v_out input) : SV_Target {
 	float2 uv = input.uv;
+	float4 pos = input.pos;
+	float4 final = {0.0,0.0,0.0,1.0};
+
+	float sin_sample = (sin(uv.x*pi*10) + 1)/2;
+
+	if(uv.y > sin_sample){
+		final = {1.0,1.0,1.0,1.0};
+	}
 
 
-    return float4( uv.x, uv.y, 0.0, 1.0);
+    return final;
     
     
 }

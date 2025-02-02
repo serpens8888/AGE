@@ -6,6 +6,7 @@ import "core:c/libc" // for system
 import "core:strings"
 import "core:fmt"
 import "core:os"
+import "core:time"
 
 renderable :: struct{ //initialized to 0, handle not pointer
 	vertex_buffer: vk_buffer,
@@ -63,7 +64,7 @@ verts :[]vertex:{
 	{pos = {-1.0, 1.0}, uv = {0,1}},
 }
 
-indices :[]u32 = {0,1,2,2,3,0}
+indices :[]u32 : {0,1,2,2,3,0}
 
 
 create_vertex_buffer :: proc(ctx: ^vk_context) -> vk_buffer{
@@ -382,20 +383,31 @@ record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer
 
 
 render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer){
-	vk.WaitForFences(ctx.device, 1, &state.in_flight_fences[state.current_frame], true, max(u64))
-	vk.ResetFences(ctx.device, 1, &state.in_flight_fences[state.current_frame])
+	timeout: u64 : 100000000
+
+	vk.WaitForFences(ctx.device, 1, &state.in_flight_fences[state.current_frame], true, timeout)
+
 
 	image_index: u32
-	result := vk.AcquireNextImageKHR(ctx.device, ctx.display.swapchain, max(u64),
+	result := vk.AcquireNextImageKHR(ctx.device, ctx.display.swapchain, timeout,
 	   								 state.image_available_semaphores[state.current_frame],
 									 {}, &image_index);
 
-	assert(result != .ERROR_OUT_OF_DATE_KHR)
+	if(result == .ERROR_OUT_OF_DATE_KHR){
+		recreate_swapchain(ctx)
+		return
+	} else if (result != .SUCCESS && result != .SUBOPTIMAL_KHR){
+		panic("failed to retrieve swapchain image")
+	}
 
 	vk.ResetFences(ctx.device, 1, &state.in_flight_fences[state.current_frame])
+
 	vk.ResetCommandBuffer(cmd_buffers[state.current_frame], {})
 
+
+
 	record_triangle_rendering(ctx, cmd_buffers[state.current_frame], vert, frag, vbuf, ibuf, image_index)
+
 
 	wait_semaphores := []vk.Semaphore{state.image_available_semaphores[state.current_frame]}
 	wait_stages: vk.PipelineStageFlags = {.COLOR_ATTACHMENT_OUTPUT}
@@ -426,7 +438,14 @@ render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []v
 		pResults = nil
 	}
 
-	result = vk.QueuePresentKHR(ctx.queues.present_queue, &present_info)
+	result = vk.QueuePresentKHR(ctx.queues.graphics_queue, &present_info)
+
+	if(result == .ERROR_OUT_OF_DATE_KHR || result == .SUBOPTIMAL_KHR){
+		recreate_swapchain(ctx)
+		return
+	} else if(result != .SUCCESS){
+		panic("failed to present swapchain image")
+	}
 
 	state.current_frame = (state.current_frame + 1) % state.frames_in_flight
 }

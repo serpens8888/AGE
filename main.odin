@@ -2,6 +2,7 @@ package main
 
 import "core:fmt"
 import "core:mem"
+import "core:time"
 
 import sdl "vendor:sdl2"
 import vk "vendor:vulkan"
@@ -50,8 +51,9 @@ main :: proc() {
 	desc_layout := vulk.create_shader_descriptor_layout(ctx.device)
 	vert := vulk.create_tri_vert(ctx.device, &desc_layout)
 	frag := vulk.create_tri_frag(ctx.device, &desc_layout)
-	cmd_buffers: []vk.CommandBuffer = vulk.create_command_buffers(ctx.device, ctx.queues.pools.graphics, 3)
+	cmd_buffers: []vk.CommandBuffer = vulk.create_command_buffers(ctx.device, ctx.queues.pools.graphics, 2)
 
+	stopwatch: time.Stopwatch
 
 	running := true
 	event: sdl.Event
@@ -63,9 +65,16 @@ main :: proc() {
 
 			}
 		}
-
+		time.stopwatch_start(&stopwatch)
 		//////RENDER HERE//////
+
 		vulk.render_tri(&ctx, &render_state, cmd_buffers, vert, frag, &vbuf.handle, &ibuf.handle)
+
+		////FINISH RENDER/////
+		time.stopwatch_stop(&stopwatch)
+		duration_ns := time.duration_nanoseconds(stopwatch._accumulation)
+		//fmt.println(1_000_000_000/duration_ns)
+		time.stopwatch_reset(&stopwatch)
 
 	}
 	
