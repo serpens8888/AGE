@@ -7,4 +7,5 @@
 *.o
 *.bin
 *.pdb
+src/odin-vma/
 

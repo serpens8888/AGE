@@ -1,6 +1,7 @@
 struct v_in{
-	[vk_location(0)] float2 position;
-	[vk_location(1)] float2 uv;
+	[vk_location(0)] float3 position;
+	[vk_location(1)] float3 normal;
+	[vk_location(2)] float2 uv;
 };
 
 
@@ -15,7 +16,7 @@ v_out vertexMain(v_in input, uint vertexID : SV_VertexID){
 	
 	v_out output;
 
-	output.pos = float4(input.position, 0.0, 1.0);
+	output.pos = float4(input.position, 1.0);
 	output.uv = input.uv;
 
 
