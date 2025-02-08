@@ -1,7 +1,7 @@
 package vulk
 
 import vk "vendor:vulkan"
-import vma "../odin-vma"
+import vma "../vma"
 import "core:mem"
 
 vk_buffer :: struct{

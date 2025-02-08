@@ -2,7 +2,7 @@ package vulk
 
 import "core:fmt"
 import vk "vendor:vulkan"
-import sdl "vendor:sdl2"
+import sdl "vendor:sdl3"
 
 
 create_swapchain :: proc(ctx: ^vk_context){
@@ -49,7 +49,7 @@ create_swapchain :: proc(ctx: ^vk_context){
 	} else {
 		height: i32 = ---
 		width: i32 = ---
-		sdl.Vulkan_GetDrawableSize(ctx.display.window, &width, &height)
+		sdl.GetWindowSizeInPixels(ctx.display.window, &width, &height)
 
 		real_extent: vk.Extent2D = {
 			u32(width),
@@ -140,13 +140,13 @@ recreate_swapchain :: proc(ctx: ^vk_context){
 	for true{
 		//if window is minimized just spin on the rendering thread(s)
 		flags := sdl.GetWindowFlags(ctx.display.window)
-		if(flags & u32(sdl.WINDOW_MINIMIZED) == 0){
+		if(flags & sdl.WINDOW_MINIMIZED == {sdl.WindowFlag(0)} ){
 			break
 		}
 
 		if(sdl.WaitEvent(&event)){
-			#partial switch event.window.event {
-				case .RESTORED: break
+			#partial switch event.type {
+				case .WINDOW_RESTORED: break
 			}
 		}
 	}

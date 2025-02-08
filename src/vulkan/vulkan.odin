@@ -1,7 +1,7 @@
 package vulk
 
 import vk "vendor:vulkan"
-import sdl "vendor:sdl2"
+import sdl "vendor:sdl3"
 
 
 queue_family_indices :: struct{
@@ -70,15 +70,15 @@ sync_manager :: struct {
 
 init_context :: proc(ctx: ^vk_context){
 	result := sdl.Init({.VIDEO})
-	assert(result == 0)
+	assert(result == false)
 
-	ctx.display.window = sdl.CreateWindow("window", sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, 1920, 1080, {.VULKAN, .RESIZABLE} )
+	ctx.display.window = sdl.CreateWindow("window", 1920, 1080, {.VULKAN, .RESIZABLE} )
 
 	load_vulkan()
 	create_instance(ctx)
 	vk.load_proc_addresses(ctx.instance)
 
-	sdl.Vulkan_CreateSurface(ctx.display.window, ctx.instance, &ctx.display.surface)
+	sdl.Vulkan_CreateSurface(ctx.display.window, ctx.instance, nil, &ctx.display.surface)
 
 	when ODIN_DEBUG{ create_debug_messenger(ctx) }
 

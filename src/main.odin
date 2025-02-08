@@ -5,10 +5,10 @@ import "core:mem"
 import "core:time"
 import "core:log"
 
-import sdl "vendor:sdl2"
+import sdl "vendor:sdl3"
 import vk "vendor:vulkan"
 import vulk "vulkan"
-import vma "odin-vma"
+import vma "vma"
 
 
 main :: proc() {
