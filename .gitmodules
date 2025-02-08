@@ -1,0 +1,3 @@
+[submodule "src/vma"]
+	path = src/vma
+	url = https://github.com/Capati/odin-vma
