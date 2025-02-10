@@ -1,4 +1,4 @@
-package vulk
+ package vulk
 
 import "core:fmt"
 import vk "vendor:vulkan"
@@ -140,18 +140,22 @@ recreate_swapchain :: proc(ctx: ^vk_context){
 	for true{
 		//if window is minimized just spin on the rendering thread(s)
 		flags := sdl.GetWindowFlags(ctx.display.window)
-		if(flags & sdl.WINDOW_MINIMIZED == {sdl.WindowFlag(0)} ){
+		if(flags & sdl.WINDOW_MINIMIZED != {sdl.WindowFlag(0)} ){
 			break
 		}
+		
+		fmt.println("Wasd")
 
 		if(sdl.WaitEvent(&event)){
 			#partial switch event.type {
-				case .WINDOW_RESTORED: break
+				case .WINDOW_RESTORED: {}
 			}
 		}
+		
 	}
 
 	vk.DeviceWaitIdle(ctx.device)
+
 
 	vk.DestroySwapchainKHR(ctx.device, ctx.display.swapchain, nil)
 	for view in ctx.display.swapchain_image_views{ vk.DestroyImageView(ctx.device, view, nil) }

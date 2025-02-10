@@ -49,14 +49,15 @@ main :: proc() {
 	vulk.compile_shader("foo.slang")
 
 	verts: []vulk.Vertex = {
-		{pos = {-1.0, -1.0, 0.0}, uv = {0,0}},
-		{pos = {1.0, -1.0, 0.0}, uv = {1,0}},
-		{pos = {1.0, 1.0, 0.0}, uv = {1,1}},
-		{pos = {-1.0, 1.0, 0.0}, uv = {0,1}},
+		{pos = {-0.5, -0.5, 0.0}, uv = {0,0}},
+		{pos = {0.5, -0.5, 0.0}, uv = {1,0}},
+		{pos = {0.5, 0.5, 0.0}, uv = {1,1}},
+		{pos = {-0.5, 0.5, 0.0}, uv = {0,1}},
 	}
 
 	indices :[]u32 = {0,1,2,2,3,0}
 
+ 
 	vma_vk_functions := vma.create_vulkan_functions()
 
 	allocator_create_info: vma.Allocator_Create_Info = {
@@ -77,7 +78,16 @@ main :: proc() {
 
 	vbuf := vulk.create_vertex_buffer(&ctx, allocator, verts)
 	ibuf := vulk.create_index_buffer(&ctx, allocator, indices)
-	desc_layout := vulk.create_shader_descriptor_layout(ctx.device)
+
+	ubufs := make([]vulk.uniform_buffer, render_state.frames_in_flight)
+	vulk.create_uniform_buffer(ubufs , allocator)
+	desc_layout := vulk.create_descriptor_layout(ctx.device)
+	desc_pool := vulk.create_descriptor_pool(ctx.device, &render_state)
+	desc_sets := vulk.create_descriptor_sets(ctx.device, desc_layout, desc_pool, &render_state)
+	vulk.write_desc_sets(ctx.device, desc_sets, ubufs)
+	pipeline_layout := vulk.create_pipeline_layout(ctx.device, &desc_layout)
+
+
 	vert := vulk.create_tri_vert(ctx.device, &desc_layout)
 	frag := vulk.create_tri_frag(ctx.device, &desc_layout)
 	cmd_buffers: []vk.CommandBuffer = vulk.create_command_buffers(ctx.device, ctx.queues.pools.graphics, u32(render_state.frames_in_flight))
@@ -97,7 +107,7 @@ main :: proc() {
 		time.stopwatch_start(&stopwatch)
 		//////RENDER HERE//////
 
-		vulk.render_tri(&ctx, &render_state, cmd_buffers, vert, frag, &vbuf.handle, &ibuf.handle)
+		vulk.render_tri(&ctx, &render_state, cmd_buffers, vert, frag, &vbuf.handle, &ibuf.handle, ubufs, pipeline_layout, desc_sets)
 
 		////FINISH RENDER/////
 		time.stopwatch_stop(&stopwatch)
@@ -108,9 +118,16 @@ main :: proc() {
 	}
 	
 	vk.DeviceWaitIdle(ctx.device)
+	
+	for i in 0..<len(ubufs){ vma.destroy_buffer(allocator, ubufs[i].buffer.handle, ubufs[i].buffer.memory) }
+	delete(ubufs)
 
 	vma.destroy_buffer(allocator, vbuf.handle, vbuf.memory)
 	vma.destroy_buffer(allocator, ibuf.handle, ibuf.memory)
+
+	vk.DestroyPipelineLayout(ctx.device, pipeline_layout, nil)
+	vk.DestroyDescriptorPool(ctx.device, desc_pool, nil)
+	delete(desc_sets)
 
 	vk.DestroyDescriptorSetLayout(ctx.device, desc_layout, nil)
 

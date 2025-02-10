@@ -1,12 +1,15 @@
 package vulk
 
 import vk "vendor:vulkan"
+import vma "../vma"
 import "core:mem" //for mem.copy
 import "core:c/libc" // for system
 import "core:strings"
 import "core:fmt"
 import "core:os"
 import "core:time"
+import "core:math/linalg/glsl"
+import "core:math"
 
 renderable :: struct{ //initialized to 0, handle not pointer
 	vertex_buffer: vk_buffer,
@@ -26,11 +29,133 @@ triangle :: struct{
 
 
 //uniforms
-uniform_buffer_object :: struct{
+
+uniform_buffer :: struct{
+	buffer: vk_buffer,
+	mapped_ptr: rawptr,
+}
+
+
+
+ubo :: struct{
 	model: matrix[4,4]f32,
 	view: matrix[4,4]f32,
 	proj: matrix[4,4]f32,
 }
+
+create_uniform_buffer :: proc(buffers: []uniform_buffer, allocator: vma.Allocator){
+	buffer_size: vk.DeviceSize = size_of(ubo)
+
+	for i in 0..<len(buffers){
+		buffers[i].buffer = create_buffer(allocator, buffer_size, {.UNIFORM_BUFFER}, {.HOST_VISIBLE, .HOST_COHERENT})
+		vma.map_memory(allocator, buffers[i].buffer.memory, &buffers[i].mapped_ptr)
+	}
+}
+create_descriptor_layout :: proc(device: vk.Device) -> vk.DescriptorSetLayout{ //creates a base descriptor set layout that passes nothing
+	layout_binding: vk.DescriptorSetLayoutBinding = {
+		binding = 0,
+		descriptorType = .UNIFORM_BUFFER,
+		descriptorCount = 1,
+		stageFlags = vk.ShaderStageFlags_ALL,
+		pImmutableSamplers = {},
+	}
+	layout_info: vk.DescriptorSetLayoutCreateInfo = {
+		sType = .DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		bindingCount = 1,
+		pBindings = &layout_binding,
+	}
+
+	desc_set_layout: vk.DescriptorSetLayout
+	vk.CreateDescriptorSetLayout(device, &layout_info, nil, &desc_set_layout)
+	return desc_set_layout
+}
+
+create_descriptor_pool :: proc(device: vk.Device, render_state: ^render_loop_state) -> vk.DescriptorPool{
+	pool_size: vk.DescriptorPoolSize = {
+		type = .UNIFORM_BUFFER,
+		descriptorCount = u32(render_state.frames_in_flight),
+	}
+
+	pool_info: vk.DescriptorPoolCreateInfo = {
+		sType = .DESCRIPTOR_POOL_CREATE_INFO,
+		poolSizeCount = 1,
+		pPoolSizes = &pool_size,
+		maxSets = u32(render_state.frames_in_flight)
+	}
+
+	desc_pool: vk.DescriptorPool
+
+	if(vk.CreateDescriptorPool(device, &pool_info, nil, &desc_pool) != .SUCCESS){
+		panic("failed to create descriptor pool")
+	}
+
+	return desc_pool
+}
+
+create_descriptor_sets :: proc(device: vk.Device, layout: vk.DescriptorSetLayout, pool: vk.DescriptorPool, render_state: ^render_loop_state) -> []vk.DescriptorSet{
+	layouts := make([]vk.DescriptorSetLayout, render_state.frames_in_flight)
+	defer delete(layouts)
+
+	for i in 0..<len(layouts){
+		layouts[i] = layout
+	}
+
+	ai: vk.DescriptorSetAllocateInfo = {
+		sType = .DESCRIPTOR_SET_ALLOCATE_INFO,
+		descriptorPool = pool,
+		descriptorSetCount = u32(render_state.frames_in_flight),
+		pSetLayouts = raw_data(layouts),
+	}
+
+	sets := make([]vk.DescriptorSet, render_state.frames_in_flight)
+	if(vk.AllocateDescriptorSets(device, &ai, raw_data(sets)) != .SUCCESS){
+		panic("failed to allocate descriptor sets")
+	}
+
+	return sets
+}
+
+write_desc_sets :: proc(device: vk.Device, sets: []vk.DescriptorSet, ubufs: []uniform_buffer){
+	for i in 0..<len(sets){
+		buffer_info: vk.DescriptorBufferInfo = {
+			buffer = ubufs[i].buffer.handle,
+			offset = 0,
+			range = size_of(ubo), //could also use vk.WHOLE_SIZE
+		}
+
+		desc_write: vk.WriteDescriptorSet = {
+			sType = .WRITE_DESCRIPTOR_SET,
+			dstSet = sets[i],
+			dstBinding = 0,
+			dstArrayElement = 0,
+			descriptorType = .UNIFORM_BUFFER,
+			descriptorCount = 1,
+			pBufferInfo = &buffer_info,
+		}
+
+		vk.UpdateDescriptorSets(device, 1, &desc_write, 0, nil)
+	}
+}
+
+create_pipeline_layout :: proc(device: vk.Device, layout: ^vk.DescriptorSetLayout) -> vk.PipelineLayout{
+
+	ci: vk.PipelineLayoutCreateInfo = {
+		sType = .PIPELINE_LAYOUT_CREATE_INFO,
+		setLayoutCount = 1,
+		pSetLayouts = layout,
+		pushConstantRangeCount = 0,
+	}
+
+	layout: vk.PipelineLayout
+	if( vk.CreatePipelineLayout(device, &ci, nil, &layout) != .SUCCESS){
+		panic("failed to create pipeline layout")
+	}
+
+	return layout
+}
+
+
+
 
 
 
@@ -81,25 +206,7 @@ read_spirv :: proc(filename: string) -> []u8{
 	return data
 }
 
-create_shader_descriptor_layout :: proc(device: vk.Device) -> vk.DescriptorSetLayout{ //creates a base descriptor set layout that passes nothing
-	layout_binding: vk.DescriptorSetLayoutBinding = {
-		binding = 0,
-		descriptorType = .UNIFORM_BUFFER,
-		descriptorCount = 1,
-		stageFlags = vk.ShaderStageFlags_ALL,
-		pImmutableSamplers = {},
-	}
-	layout_info: vk.DescriptorSetLayoutCreateInfo = {
-		sType = .DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		flags = {.DESCRIPTOR_BUFFER_EXT},
-		bindingCount = 1,
-		pBindings = &layout_binding,
-	}
 
-	desc_set_layout: vk.DescriptorSetLayout
-	vk.CreateDescriptorSetLayout(device, &layout_info, nil, &desc_set_layout)
-	return desc_set_layout
-}
 
 create_tri_vert :: proc(device: vk.Device, layout: ^vk.DescriptorSetLayout) -> vk.ShaderEXT{
 	spirv := read_spirv("foo.spv")
@@ -151,7 +258,7 @@ create_tri_frag :: proc(device: vk.Device, layout: ^vk.DescriptorSetLayout) -> v
 }
 
 //command buffer recording
-record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer, image_idx: u32){
+record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer, pipeline_layout: vk.PipelineLayout, set: ^vk.DescriptorSet, image_idx: u32){
 	begin_info: vk.CommandBufferBeginInfo
 	begin_info.sType = .COMMAND_BUFFER_BEGIN_INFO
 	vk.BeginCommandBuffer(cmd_buffer, &begin_info)
@@ -245,7 +352,7 @@ record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer
 	sample_mask: vk.SampleMask = 0b1 //msaa
 	vk.CmdSetSampleMaskEXT(cmd_buffer, {._1}, &sample_mask)
 
-	vk.CmdSetFrontFace(cmd_buffer, .CLOCKWISE)
+	vk.CmdSetFrontFace(cmd_buffer, .COUNTER_CLOCKWISE) //since we flip the orientation of the tris in the shader, because vulkan and opengl have opposite NDC
 
 	vk.CmdSetAlphaToCoverageEnableEXT(cmd_buffer, false)
 
@@ -282,14 +389,16 @@ record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer
 
 	vk.CmdBindIndexBuffer(cmd_buffer, ibuf^, 0, .UINT32)
 
-	vk.CmdDrawIndexed(cmd_buffer, 6, 1, 0, 0, 0)
+	vk.CmdBindDescriptorSets(cmd_buffer, .GRAPHICS, pipeline_layout, 0, 1, set, 0, nil)
 
+	vk.CmdDrawIndexed(cmd_buffer, 6, 1, 0, 0, 0)
+ 
 	vk.CmdEndRendering(cmd_buffer)
 	vk.EndCommandBuffer(cmd_buffer)
 }
 
 //render 
-render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer){
+render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer, ubufs: []uniform_buffer, pipeline_layout: vk.PipelineLayout, sets: []vk.DescriptorSet){
 	timeout: u64 : 100000000
 
 	vk.WaitForFences(ctx.device, 1, &state.in_flight_fences[state.current_frame], true, timeout)
@@ -311,9 +420,9 @@ render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []v
 
 	vk.ResetCommandBuffer(cmd_buffers[state.current_frame], {})
 
+	update_uniform_buffer(ubufs[state.current_frame], ctx)
 
-
-	record_triangle_rendering(ctx, cmd_buffers[state.current_frame], vert, frag, vbuf, ibuf, image_index)
+	record_triangle_rendering(ctx, cmd_buffers[state.current_frame], vert, frag, vbuf, ibuf, pipeline_layout, &sets[state.current_frame], image_index)
 
 
 	wait_semaphores := []vk.Semaphore{state.image_available_semaphores[state.current_frame]}
@@ -356,7 +465,22 @@ render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []v
 
 	state.current_frame = (state.current_frame + 1) % state.frames_in_flight
 }
+start_time := time.tick_now()
 
+update_uniform_buffer :: proc(ubuf: uniform_buffer, ctx: ^vk_context){
+	curr_time := time.tick_now()
+	duration := time.tick_diff(start_time, curr_time)
+	seconds := time.duration_seconds(duration)
+
+	obj: ubo
+	obj.model = glsl.mat4Rotate( [3]f32{0.0,0.0,1.0}, math.PI/2 * f32(seconds))
+	obj.view = glsl.mat4LookAt( [3]f32{2, 2, 2}, [3]f32{0, 0, 0}, [3]f32{0, 0, 1} )
+	obj.proj = glsl.mat4Perspective(math.PI/4, f32(ctx.display.swapchain_extent.width) / f32(ctx.display.swapchain_extent.height), 0.1, 10)
+	obj.proj[1][1] *= -1
+
+	mem.copy(ubuf.mapped_ptr, &obj, size_of(obj))
+
+}
 
 
 

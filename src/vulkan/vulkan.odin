@@ -2,6 +2,7 @@ package vulk
 
 import vk "vendor:vulkan"
 import sdl "vendor:sdl3"
+import "core:log"
 
 
 queue_family_indices :: struct{
@@ -70,9 +71,13 @@ sync_manager :: struct {
 
 init_context :: proc(ctx: ^vk_context){
 	result := sdl.Init({.VIDEO})
-	assert(result == false)
+	assert(result != false)
 
 	ctx.display.window = sdl.CreateWindow("window", 1920, 1080, {.VULKAN, .RESIZABLE} )
+	min_w, min_h: i32 : 1, 1
+	if( sdl.SetWindowMinimumSize(ctx.display.window, min_w, min_h) != true){
+		log.error("failed to set minimum window size")
+	}
 
 	load_vulkan()
 	create_instance(ctx)
