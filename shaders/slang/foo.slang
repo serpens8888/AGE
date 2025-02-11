@@ -45,7 +45,7 @@ float4 fragmentMain(in v_out input) : SV_Target {
 	float2 uv = input.uv;
 	float4 pos = input.pos;
 
-	float r = abs(sinh(time))/2*uv.x;
+	float r = abs(sin(time))/2*uv.x;
 	float g = abs(cos(time))/2*uv.y;
 	float b = abs(tan(time))/2;
 

@@ -137,20 +137,25 @@ recreate_swapchain :: proc(ctx: ^vk_context){
 
 	sdl.GetWindowSize(ctx.display.window, &w, &h)
 
-	outer: for true{
-		//if window is minimized just spin on the rendering thread(s)
+	for{
 		flags := sdl.GetWindowFlags(ctx.display.window)
-		if(flags & sdl.WINDOW_MINIMIZED == {sdl.WindowFlag(0)} ){
-			break
-		}
-		
-		if(sdl.WaitEvent(&event)){
-			#partial switch event.type {
-				case .WINDOW_RESTORED: {break outer}
+
+		if(.MINIMIZED in flags){
+			if(!sdl.WaitEvent(&event)){
+				panic("failed to wait on event")
 			}
+
+			fmt.println(flags)
+			if(event.type == .WINDOW_RESTORED){
+				break
+			}
+		} else{
+			 break
 		}
+	 }
+
+		 
 		
-	}
 
 	vk.DeviceWaitIdle(ctx.device)
 
