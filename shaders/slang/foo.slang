@@ -30,7 +30,8 @@ v_out vertexMain(v_in input, uint vertexID : SV_VertexID){
 	
 	v_out output;
 
-	output.pos =  mul(mul(mul(ubo.proj, ubo.view), ubo.model), float4(input.pos, 1.0));
+	output.pos =  mul(mul(mul(ubo.proj, ubo.view), ubo.model), float4(input.pos, 1.0)); //TO USE PERSEPCTIVE CHANGE TRUANGLE DIRECTION FOR CULLING
+	//output.pos = float4(input.pos, 1.0);
 
 	output.uv = input.uv;
 
@@ -38,16 +39,20 @@ v_out vertexMain(v_in input, uint vertexID : SV_VertexID){
 }
 
 
+
 [shader("fragment")]
 float4 fragmentMain(in v_out input) : SV_Target {
 	float2 uv = input.uv;
 	float4 pos = input.pos;
-	
-	float ss = abs(sin(time));
-	float cs = abs(cos(time*2));
-	float ts = abs(tan(time/2));
 
-    return float4(ss, cs, ts, 1.0);
+	float r = abs(sinh(time))/2*uv.x;
+	float g = abs(cos(time))/2*uv.y;
+	float b = abs(tan(time))/2;
+
+
+	return float4(r, g, b, 1);
+	
+
 
     
     

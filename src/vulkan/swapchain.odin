@@ -137,18 +137,16 @@ recreate_swapchain :: proc(ctx: ^vk_context){
 
 	sdl.GetWindowSize(ctx.display.window, &w, &h)
 
-	for true{
+	outer: for true{
 		//if window is minimized just spin on the rendering thread(s)
 		flags := sdl.GetWindowFlags(ctx.display.window)
-		if(flags & sdl.WINDOW_MINIMIZED != {sdl.WindowFlag(0)} ){
+		if(flags & sdl.WINDOW_MINIMIZED == {sdl.WindowFlag(0)} ){
 			break
 		}
 		
-		fmt.println("Wasd")
-
 		if(sdl.WaitEvent(&event)){
 			#partial switch event.type {
-				case .WINDOW_RESTORED: {}
+				case .WINDOW_RESTORED: {break outer}
 			}
 		}
 		

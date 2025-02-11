@@ -30,143 +30,12 @@ triangle :: struct{
 
 //uniforms
 
-
-
 ubo :: struct{
 	model: matrix[4,4]f32,
 	view: matrix[4,4]f32,
 	proj: matrix[4,4]f32,
 	time: f32,
 }
-
-create_uniform_buffer :: proc(buffers: []uniform_buffer, allocator: vma.Allocator){
-	buffer_size: vk.DeviceSize = size_of(ubo)
-
-	for i in 0..<len(buffers){
-		buffers[i].buffer = create_buffer(allocator, buffer_size, {.UNIFORM_BUFFER}, {.HOST_VISIBLE, .HOST_COHERENT})
-		vma.map_memory(allocator, buffers[i].buffer.memory, &buffers[i].mapped_ptr)
-	}
-}
-create_descriptor_layout :: proc(device: vk.Device) -> vk.DescriptorSetLayout{ //creates a base descriptor set layout that passes nothing
-	layout_binding: vk.DescriptorSetLayoutBinding = {
-		binding = 0,
-		descriptorType = .UNIFORM_BUFFER,
-		descriptorCount = 1,
-		stageFlags = vk.ShaderStageFlags_ALL,
-		pImmutableSamplers = {},
-	}
-	layout_info: vk.DescriptorSetLayoutCreateInfo = {
-		sType = .DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		bindingCount = 1,
-		pBindings = &layout_binding,
-	}
-
-	desc_set_layout: vk.DescriptorSetLayout
-	vk.CreateDescriptorSetLayout(device, &layout_info, nil, &desc_set_layout)
-	return desc_set_layout
-}
-
-create_descriptor_pool :: proc(device: vk.Device, render_state: ^render_loop_state) -> vk.DescriptorPool{
-	pool_size: vk.DescriptorPoolSize = {
-		type = .UNIFORM_BUFFER,
-		descriptorCount = u32(render_state.frames_in_flight),
-	}
-
-	pool_info: vk.DescriptorPoolCreateInfo = {
-		sType = .DESCRIPTOR_POOL_CREATE_INFO,
-		poolSizeCount = 1,
-		pPoolSizes = &pool_size,
-		maxSets = u32(render_state.frames_in_flight)
-	}
-
-	desc_pool: vk.DescriptorPool
-
-	if(vk.CreateDescriptorPool(device, &pool_info, nil, &desc_pool) != .SUCCESS){
-		panic("failed to create descriptor pool")
-	}
-
-	return desc_pool
-}
-
-create_descriptor_sets :: proc(device: vk.Device, layout: vk.DescriptorSetLayout, pool: vk.DescriptorPool, render_state: ^render_loop_state) -> []vk.DescriptorSet{
-	layouts := make([]vk.DescriptorSetLayout, render_state.frames_in_flight)
-	defer delete(layouts)
-
-	for i in 0..<len(layouts){
-		layouts[i] = layout
-	}
-
-	ai: vk.DescriptorSetAllocateInfo = {
-		sType = .DESCRIPTOR_SET_ALLOCATE_INFO,
-		descriptorPool = pool,
-		descriptorSetCount = u32(render_state.frames_in_flight),
-		pSetLayouts = raw_data(layouts),
-	}
-
-	sets := make([]vk.DescriptorSet, render_state.frames_in_flight)
-	if(vk.AllocateDescriptorSets(device, &ai, raw_data(sets)) != .SUCCESS){
-		panic("failed to allocate descriptor sets")
-	}
-
-	return sets
-}
-
-write_desc_sets :: proc(device: vk.Device, sets: []vk.DescriptorSet, ubufs: []uniform_buffer){
-	for i in 0..<len(sets){
-		buffer_info: vk.DescriptorBufferInfo = {
-			buffer = ubufs[i].buffer.handle,
-			offset = 0,
-			range = size_of(ubo), //could also use vk.WHOLE_SIZE
-		}
-
-		desc_write: vk.WriteDescriptorSet = {
-			sType = .WRITE_DESCRIPTOR_SET,
-			dstSet = sets[i],
-			dstBinding = 0,
-			dstArrayElement = 0,
-			descriptorType = .UNIFORM_BUFFER,
-			descriptorCount = 1,
-			pBufferInfo = &buffer_info,
-		}
-
-		vk.UpdateDescriptorSets(device, 1, &desc_write, 0, nil)
-	}
-}
-
-create_pipeline_layout :: proc(device: vk.Device, layout: ^vk.DescriptorSetLayout) -> vk.PipelineLayout{
-
-	ci: vk.PipelineLayoutCreateInfo = {
-		sType = .PIPELINE_LAYOUT_CREATE_INFO,
-		setLayoutCount = 1,
-		pSetLayouts = layout,
-		pushConstantRangeCount = 0,
-	}
-
-	layout: vk.PipelineLayout
-	if( vk.CreatePipelineLayout(device, &ci, nil, &layout) != .SUCCESS){
-		panic("failed to create pipeline layout")
-	}
-
-	return layout
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 //shader compilation & shader objects
@@ -387,7 +256,7 @@ record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer
 
 	vk.CmdBindDescriptorSets(cmd_buffer, .GRAPHICS, uniform.pipeline_layout, 0, 1, &uniform.frames[current_frame].set, 0, nil)
 
-	vk.CmdDrawIndexed(cmd_buffer, 6, 1, 0, 0, 0)
+	vk.CmdDrawIndexed(cmd_buffer, 36, 1, 0, 0, 0)
  
 	vk.CmdEndRendering(cmd_buffer)
 	vk.EndCommandBuffer(cmd_buffer)
@@ -472,11 +341,11 @@ update_uniform_buffer :: proc(dst: rawptr, ctx: ^vk_context){
 	seconds := time.duration_seconds(duration)
 
 	obj: ubo
-	obj.model = glsl.mat4Rotate( [3]f32{0.0,0.0,1.0}, math.PI/2 * f32(seconds))
+	obj.model = glsl.mat4Rotate( [3]f32{0.0,0.0,1.0}, math.PI/2 * f32(seconds)*2) //1 to stop the spinning
 	obj.view = glsl.mat4LookAt( [3]f32{2, 2, 2}, [3]f32{0, 0, 0}, [3]f32{0, 0, 1} )
 	obj.proj = glsl.mat4Perspective(math.PI/4, f32(ctx.display.swapchain_extent.width) / f32(ctx.display.swapchain_extent.height), 0.1, 10)
 	obj.proj[1][1] *= -1
-	obj.time = f32(seconds)
+	obj.time = f32(seconds)/3
 
 	mem.copy(dst, &obj, size_of(obj))
 
