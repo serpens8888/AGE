@@ -30,17 +30,13 @@ triangle :: struct{
 
 //uniforms
 
-uniform_buffer :: struct{
-	buffer: vk_buffer,
-	mapped_ptr: rawptr,
-}
-
 
 
 ubo :: struct{
 	model: matrix[4,4]f32,
 	view: matrix[4,4]f32,
 	proj: matrix[4,4]f32,
+	time: f32,
 }
 
 create_uniform_buffer :: proc(buffers: []uniform_buffer, allocator: vma.Allocator){
@@ -258,7 +254,7 @@ create_tri_frag :: proc(device: vk.Device, layout: ^vk.DescriptorSetLayout) -> v
 }
 
 //command buffer recording
-record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer, pipeline_layout: vk.PipelineLayout, set: ^vk.DescriptorSet, image_idx: u32){
+record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer, uniform: ^Uniform, image_idx: u32, current_frame: uint){
 	begin_info: vk.CommandBufferBeginInfo
 	begin_info.sType = .COMMAND_BUFFER_BEGIN_INFO
 	vk.BeginCommandBuffer(cmd_buffer, &begin_info)
@@ -389,7 +385,7 @@ record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer
 
 	vk.CmdBindIndexBuffer(cmd_buffer, ibuf^, 0, .UINT32)
 
-	vk.CmdBindDescriptorSets(cmd_buffer, .GRAPHICS, pipeline_layout, 0, 1, set, 0, nil)
+	vk.CmdBindDescriptorSets(cmd_buffer, .GRAPHICS, uniform.pipeline_layout, 0, 1, &uniform.frames[current_frame].set, 0, nil)
 
 	vk.CmdDrawIndexed(cmd_buffer, 6, 1, 0, 0, 0)
  
@@ -398,7 +394,7 @@ record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer
 }
 
 //render 
-render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer, ubufs: []uniform_buffer, pipeline_layout: vk.PipelineLayout, sets: []vk.DescriptorSet){
+render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer, uniform: ^Uniform){
 	timeout: u64 : 100000000
 
 	vk.WaitForFences(ctx.device, 1, &state.in_flight_fences[state.current_frame], true, timeout)
@@ -420,9 +416,9 @@ render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []v
 
 	vk.ResetCommandBuffer(cmd_buffers[state.current_frame], {})
 
-	update_uniform_buffer(ubufs[state.current_frame], ctx)
+	update_uniform_buffer(uniform.frames[state.current_frame].mapped_data, ctx)
 
-	record_triangle_rendering(ctx, cmd_buffers[state.current_frame], vert, frag, vbuf, ibuf, pipeline_layout, &sets[state.current_frame], image_index)
+	record_triangle_rendering(ctx, cmd_buffers[state.current_frame], vert, frag, vbuf, ibuf, uniform , image_index, state.current_frame)
 
 
 	wait_semaphores := []vk.Semaphore{state.image_available_semaphores[state.current_frame]}
@@ -465,9 +461,12 @@ render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []v
 
 	state.current_frame = (state.current_frame + 1) % state.frames_in_flight
 }
+
+
+
 start_time := time.tick_now()
 
-update_uniform_buffer :: proc(ubuf: uniform_buffer, ctx: ^vk_context){
+update_uniform_buffer :: proc(dst: rawptr, ctx: ^vk_context){
 	curr_time := time.tick_now()
 	duration := time.tick_diff(start_time, curr_time)
 	seconds := time.duration_seconds(duration)
@@ -477,8 +476,9 @@ update_uniform_buffer :: proc(ubuf: uniform_buffer, ctx: ^vk_context){
 	obj.view = glsl.mat4LookAt( [3]f32{2, 2, 2}, [3]f32{0, 0, 0}, [3]f32{0, 0, 1} )
 	obj.proj = glsl.mat4Perspective(math.PI/4, f32(ctx.display.swapchain_extent.width) / f32(ctx.display.swapchain_extent.height), 0.1, 10)
 	obj.proj[1][1] *= -1
+	obj.time = f32(seconds)
 
-	mem.copy(ubuf.mapped_ptr, &obj, size_of(obj))
+	mem.copy(dst, &obj, size_of(obj))
 
 }
 
