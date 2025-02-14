@@ -243,11 +243,12 @@ pick_gpu :: proc(gpus: []vk.PhysicalDevice, ctx: vk_context) -> vk.PhysicalDevic
 
 		indices := select_queues(props[i].gpu, ctx.display.surface)
 
-		if(features.geometryShader != true || indices.graphics_family == max(u32)){
+		if(features.geometryShader != true || indices.graphics_family == max(u32) || features.samplerAnisotropy != true){
 			props[i].points = 0
 			unviable_gpus += 1
 			continue
 		}
+
 
 
 		if(properties.deviceType ==  .DISCRETE_GPU){
@@ -377,8 +378,11 @@ create_device :: proc(ctx: ^vk_context){
 
 
 	//dynamic rendering is in core
-	physical_device_features2: vk.PhysicalDeviceFeatures2 = {
-		sType = .PHYSICAL_DEVICE_FEATURES_2
+	features2: vk.PhysicalDeviceFeatures2 = {
+		sType = .PHYSICAL_DEVICE_FEATURES_2,
+		features = {
+			samplerAnisotropy = true,
+		}
 	}
 	dynamic_rendering: vk.PhysicalDeviceDynamicRenderingFeaturesKHR = {
 		sType = .PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR,
@@ -402,7 +406,7 @@ create_device :: proc(ctx: ^vk_context){
 	}
 
 
-	physical_device_features2.pNext = &dynamic_rendering
+	features2.pNext = &dynamic_rendering
 	dynamic_rendering.pNext = &shader_obj
 	shader_obj.pNext = &desc_buf
 	desc_buf.pNext = &coherent_memory
@@ -417,10 +421,11 @@ create_device :: proc(ctx: ^vk_context){
 		"VK_AMD_device_coherent_memory",
 		"VK_KHR_buffer_device_address"
 	}
+
 	
 	device_ci: vk.DeviceCreateInfo = {
 		sType = .DEVICE_CREATE_INFO,
-		pNext = &physical_device_features2,
+		pNext = &features2,
 		pQueueCreateInfos = raw_data(queue_cis),
 		queueCreateInfoCount = u32(len(queue_cis)),
 		ppEnabledExtensionNames = raw_data(device_exts),

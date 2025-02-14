@@ -48,31 +48,58 @@ main :: proc() {
 
 	vulk.compile_shader("foo.slang")
 
-	verts: []vulk.Vertex = {
-		{pos = {-0.5, -0.5, -0.5}, uv = {0, 0}}, // 0
-		{pos = { 0.5, -0.5, -0.5}, uv = {1, 0}}, // 1
-		{pos = { 0.5,  0.5, -0.5}, uv = {1, 1}}, // 2
-		{pos = {-0.5,  0.5, -0.5}, uv = {0, 1}}, // 3
-		{pos = {-0.5, -0.5,  0.5}, uv = {0, 0}}, // 4
-		{pos = { 0.5, -0.5,  0.5}, uv = {1, 0}}, // 5
-		{pos = { 0.5,  0.5,  0.5}, uv = {1, 1}}, // 6
-		{pos = {-0.5,  0.5,  0.5}, uv = {0, 1}}, // 7
-	}
+verts: []vulk.Vertex = {
+    // Back face (z = -0.5)
+    {pos = {-0.5, -0.5, -0.5}, uv = {0, 1}},
+    {pos = { 0.5, -0.5, -0.5}, uv = {1, 1}},
+    {pos = { 0.5,  0.5, -0.5}, uv = {1, 0}},
+    {pos = {-0.5,  0.5, -0.5}, uv = {0, 0}},
+    
+    // Front face (z = 0.5)
+    {pos = {-0.5, -0.5, 0.5}, uv = {0, 1}},
+    {pos = { 0.5, -0.5, 0.5}, uv = {1, 1}},
+    {pos = { 0.5,  0.5, 0.5}, uv = {1, 0}},
+    {pos = {-0.5,  0.5, 0.5}, uv = {0, 0}},
+    
+    // Left face (x = -0.5)
+    {pos = {-0.5, -0.5, -0.5}, uv = {0, 1}},
+    {pos = {-0.5, -0.5,  0.5}, uv = {1, 1}},
+    {pos = {-0.5,  0.5,  0.5}, uv = {1, 0}},
+    {pos = {-0.5,  0.5, -0.5}, uv = {0, 0}},
+    
+    // Right face (x = 0.5)
+    {pos = {0.5, -0.5, 0.5}, uv = {0, 1}},
+    {pos = {0.5, -0.5, -0.5}, uv = {1, 1}},
+    {pos = {0.5,  0.5, -0.5}, uv = {1, 0}},
+    {pos = {0.5,  0.5, 0.5}, uv = {0, 0}},
+    
+    // Top face (y = 0.5)
+    {pos = {-0.5, 0.5, 0.5}, uv = {0, 0}},
+    {pos = { 0.5, 0.5, 0.5}, uv = {1, 0}},
+    {pos = { 0.5, 0.5, -0.5}, uv = {1, 1}},
+    {pos = {-0.5, 0.5, -0.5}, uv = {0, 1}},
+    
+    // Bottom face (y = -0.5)
+    {pos = {-0.5, -0.5, -0.5}, uv = {0, 1}},
+    {pos = { 0.5, -0.5, -0.5}, uv = {1, 1}},
+    {pos = { 0.5, -0.5,  0.5}, uv = {1, 0}},
+    {pos = {-0.5, -0.5,  0.5}, uv = {0, 0}},
+}
 
-	indices: []u32 = {
-		// Back face (z = -1)
-		1, 0, 3,  1, 3, 2,
-		// Front face (z =  1)
-		4, 5, 6,  4, 6, 7,
-		// Left face (x = -1)
-		0, 4, 7,  0, 7, 3,
-		// Right face (x =  1)
-		5, 1, 2,  5, 2, 6,
-		// Top face (y =  1)
-		3, 7, 6,  3, 6, 2,
-		// Bottom face (y = -1)
-		0, 1, 5,  0, 5, 4,
-	}
+indices: []u32 = {
+    // Back face
+    0, 1, 2,  0, 2, 3,
+    // Front face
+    4, 5, 6,  4, 6, 7,
+    // Left face
+    8, 9, 10, 8, 10, 11,
+    // Right face
+    12, 13, 14, 12, 14, 15,
+    // Top face
+    16, 17, 18, 16, 18, 19,
+    // Bottom face
+    20, 21, 22, 20, 22, 23,
+}
  
 	vma_vk_functions := vma.create_vulkan_functions()
 
@@ -95,11 +122,18 @@ main :: proc() {
 	vbuf := vulk.create_vertex_buffer(&ctx, allocator, verts)
 	ibuf := vulk.create_index_buffer(&ctx, allocator, indices)
 
-	uniform := vulk.create_uniform(ctx.device, &render_state, allocator, vulk.ubo)
+	uniform := vulk.create_uniform(ctx.device, &render_state, allocator, vulk.ubo, 0)
 	defer vulk.destroy_uniform(ctx.device, allocator, &uniform)
 
-	vert := vulk.create_tri_vert(ctx.device, &uniform.layout)
-	frag := vulk.create_tri_frag(ctx.device, &uniform.layout)
+	texture := vulk.create_texture(&ctx, &render_state, allocator, "assets/images/electronics.png", 1)
+	defer vulk.destroy_texture(ctx.device, allocator, &texture)
+
+	pipeline_layout := vulk.create_pipeline_layout(ctx.device, {uniform.layout, texture.uniform.layout}, {})
+	defer vk.DestroyPipelineLayout(ctx.device, pipeline_layout, nil)
+
+	vert := vulk.create_tri_vert(ctx.device, {uniform.layout, texture.uniform.layout})
+	frag := vulk.create_tri_frag(ctx.device, {uniform.layout, texture.uniform.layout})
+
 	cmd_buffers: []vk.CommandBuffer = vulk.create_command_buffers(ctx.device, ctx.queues.pools.graphics, u32(render_state.frames_in_flight))
 
 	stopwatch: time.Stopwatch
@@ -117,7 +151,7 @@ main :: proc() {
 		time.stopwatch_start(&stopwatch)
 		//////RENDER HERE//////
 
-		vulk.render_tri(&ctx, &render_state, cmd_buffers, vert, frag, &vbuf.handle, &ibuf.handle, &uniform)
+		vulk.render_tri(&ctx, &render_state, cmd_buffers, vert, frag, &vbuf.handle, &ibuf.handle, &uniform, &texture, pipeline_layout)
 
 		////FINISH RENDER/////
 		time.stopwatch_stop(&stopwatch)

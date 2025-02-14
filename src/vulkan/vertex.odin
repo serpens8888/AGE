@@ -51,7 +51,7 @@ get_uv_attr_desc :: proc() -> vk.VertexInputAttributeDescription2EXT{
 	return attr_desc
 }
 
-create_vertex_buffer :: proc(ctx: ^vk_context, allocator: vma.Allocator, verts: []Vertex) -> vk_buffer{
+create_vertex_buffer :: proc(ctx: ^vk_context, allocator: vma.Allocator, verts: []Vertex) -> Buffer{
 	buffer_size := vk.DeviceSize(len(verts)* size_of(verts[0]))
 	staging_buffer := create_buffer(allocator, buffer_size, {.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT})
 
@@ -68,7 +68,7 @@ create_vertex_buffer :: proc(ctx: ^vk_context, allocator: vma.Allocator, verts: 
 	return vertex_buffer
 }
 
-create_index_buffer :: proc(ctx: ^vk_context, allocator: vma.Allocator, indices: []u32) -> vk_buffer{
+create_index_buffer :: proc(ctx: ^vk_context, allocator: vma.Allocator, indices: []u32) -> Buffer{
 	buffer_size := vk.DeviceSize(len(indices) * size_of(indices[0]))
 	staging_buffer := create_buffer(allocator, buffer_size, {.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT})
 

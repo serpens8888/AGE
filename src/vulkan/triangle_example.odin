@@ -12,8 +12,8 @@ import "core:math/linalg/glsl"
 import "core:math"
 
 renderable :: struct{ //initialized to 0, handle not pointer
-	vertex_buffer: vk_buffer,
-	index_buffer: vk_buffer,
+	vertex_buffer: Buffer,
+	index_buffer: Buffer,
 	vertex: vk.ShaderEXT,
 	tesselation_ctl: vk.ShaderEXT,
 	tesselation_eval: vk.ShaderEXT,
@@ -73,7 +73,7 @@ read_spirv :: proc(filename: string) -> []u8{
 
 
 
-create_tri_vert :: proc(device: vk.Device, layout: ^vk.DescriptorSetLayout) -> vk.ShaderEXT{
+create_tri_vert :: proc(device: vk.Device, layouts: []vk.DescriptorSetLayout) -> vk.ShaderEXT{
 	spirv := read_spirv("foo.spv")
 	defer delete(spirv)
 
@@ -86,8 +86,8 @@ create_tri_vert :: proc(device: vk.Device, layout: ^vk.DescriptorSetLayout) -> v
 		codeSize = len(spirv), // works becasue its read in bytes, len == size_of
 		pCode = transmute([^]u32)raw_data(spirv),
 		pName = "main",
-		setLayoutCount = 1,
-		pSetLayouts = layout,
+		setLayoutCount = u32(len(layouts)),
+		pSetLayouts = raw_data(layouts),
 		pushConstantRangeCount = 0,
 		pPushConstantRanges = nil,
 		pSpecializationInfo = nil,
@@ -97,7 +97,7 @@ create_tri_vert :: proc(device: vk.Device, layout: ^vk.DescriptorSetLayout) -> v
 	return vert_shader
 }
 
-create_tri_frag :: proc(device: vk.Device, layout: ^vk.DescriptorSetLayout) -> vk.ShaderEXT{
+create_tri_frag :: proc(device: vk.Device, layouts: []vk.DescriptorSetLayout) -> vk.ShaderEXT{
 	spirv := read_spirv("foo.spv")
 	defer delete(spirv)
 
@@ -110,8 +110,8 @@ create_tri_frag :: proc(device: vk.Device, layout: ^vk.DescriptorSetLayout) -> v
 		codeSize = len(spirv), // works becasue its read in bytes, len == size_of
 		pCode = transmute([^]u32)raw_data(spirv),
 		pName = "main",
-		setLayoutCount = 1,
-		pSetLayouts = layout,
+		setLayoutCount = u32(len(layouts)),
+		pSetLayouts = raw_data(layouts),
 		pushConstantRangeCount = 0,
 		pPushConstantRanges = nil,
 		pSpecializationInfo = nil,
@@ -123,7 +123,7 @@ create_tri_frag :: proc(device: vk.Device, layout: ^vk.DescriptorSetLayout) -> v
 }
 
 //command buffer recording
-record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer, uniform: ^Uniform, image_idx: u32, current_frame: uint){
+record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer, uniform: ^Uniform, texture: ^Texture, pipeline_layout: vk.PipelineLayout, image_idx: u32, current_frame: uint){
 	begin_info: vk.CommandBufferBeginInfo
 	begin_info.sType = .COMMAND_BUFFER_BEGIN_INFO
 	vk.BeginCommandBuffer(cmd_buffer, &begin_info)
@@ -254,7 +254,9 @@ record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer
 
 	vk.CmdBindIndexBuffer(cmd_buffer, ibuf^, 0, .UINT32)
 
-	vk.CmdBindDescriptorSets(cmd_buffer, .GRAPHICS, uniform.pipeline_layout, 0, 1, &uniform.frames[current_frame].set, 0, nil)
+	uniforms: []vk.DescriptorSet = {uniform.frames[current_frame].set, texture.uniform.frames[current_frame].set}
+
+	vk.CmdBindDescriptorSets(cmd_buffer, .GRAPHICS, pipeline_layout, 0, u32(len(uniforms)), raw_data(uniforms) , 0, nil)
 
 	vk.CmdDrawIndexed(cmd_buffer, 36, 1, 0, 0, 0)
  
@@ -263,7 +265,7 @@ record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer
 }
 
 //render 
-render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer, uniform: ^Uniform){
+render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer, uniform: ^Uniform, texture: ^Texture, pipeline_layout: vk.PipelineLayout){
 	timeout: u64 : 100000000
 
 	vk.WaitForFences(ctx.device, 1, &state.in_flight_fences[state.current_frame], true, timeout)
@@ -287,7 +289,7 @@ render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []v
 
 	update_uniform_buffer(uniform.frames[state.current_frame].mapped_data, ctx)
 
-	record_triangle_rendering(ctx, cmd_buffers[state.current_frame], vert, frag, vbuf, ibuf, uniform , image_index, state.current_frame)
+	record_triangle_rendering(ctx, cmd_buffers[state.current_frame], vert, frag, vbuf, ibuf, uniform, texture, pipeline_layout, image_index, state.current_frame)
 
 
 	wait_semaphores := []vk.Semaphore{state.image_available_semaphores[state.current_frame]}

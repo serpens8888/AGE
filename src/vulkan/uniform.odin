@@ -4,30 +4,24 @@ import "core:fmt"
 import vk "vendor:vulkan"
 import vma "../vma"
 
-uniform_buffer :: struct{
-	buffer: vk_buffer,
-	mapped_ptr: rawptr,
-}
-
 UniformBufferFrame :: struct{
-	buffer: vk_buffer,
+	buffer: Buffer,
 	mapped_data: rawptr,
 	set: vk.DescriptorSet,
 }
 
 Uniform :: struct{
 	layout: vk.DescriptorSetLayout,
-	pipeline_layout: vk.PipelineLayout,
 	pool: vk.DescriptorPool,
 	frames: []UniformBufferFrame,
 }
 
-create_uniform :: proc(device: vk.Device, render_state: ^render_loop_state, allocator: vma.Allocator, $T: typeid) -> Uniform{
+create_uniform :: proc(device: vk.Device, render_state: ^render_loop_state, allocator: vma.Allocator, $T: typeid, binding: u32) -> Uniform{
 	uniform: Uniform
 	uniform.frames = make([]UniformBufferFrame, render_state.frames_in_flight)
 
 	layout_binding: vk.DescriptorSetLayoutBinding = {
-		binding = 0,
+		binding = binding,
 		descriptorType = .UNIFORM_BUFFER,
 		descriptorCount = 1,
 		stageFlags = vk.ShaderStageFlags_ALL,
@@ -43,20 +37,6 @@ create_uniform :: proc(device: vk.Device, render_state: ^render_loop_state, allo
 	if( vk.CreateDescriptorSetLayout(device, &layout_info, nil, &uniform.layout) != .SUCCESS){
 		panic("failed to create descriptor set layout")
 	}
-
-
-
-	ci: vk.PipelineLayoutCreateInfo = {
-		sType = .PIPELINE_LAYOUT_CREATE_INFO,
-		setLayoutCount = 1,
-		pSetLayouts = &uniform.layout,
-		pushConstantRangeCount = 0,
-	}
-
-	if( vk.CreatePipelineLayout(device, &ci, nil, &uniform.pipeline_layout) != .SUCCESS){
-		panic("failed to create pipeline layout")
-	}
-
 
 
 	pool_size: vk.DescriptorPoolSize = {
@@ -102,7 +82,7 @@ create_uniform :: proc(device: vk.Device, render_state: ^render_loop_state, allo
 		desc_write: vk.WriteDescriptorSet = {
 			sType = .WRITE_DESCRIPTOR_SET,
 			dstSet = uniform.frames[i].set,
-			dstBinding = 0,
+			dstBinding = binding,
 			dstArrayElement = 0,
 			descriptorType = .UNIFORM_BUFFER,
 			descriptorCount = 1,
@@ -121,11 +101,29 @@ destroy_uniform :: proc(device: vk.Device, allocator: vma.Allocator, uniform: ^U
 	for i in 0..<len(uniform.frames){
 		vma.destroy_buffer(allocator, uniform.frames[i].buffer.handle, uniform.frames[i].buffer.memory)
 	}
-	vk.DestroyPipelineLayout(device, uniform.pipeline_layout, nil)
 	vk.DestroyDescriptorPool(device, uniform.pool, nil)
 	vk.DestroyDescriptorSetLayout(device, uniform.layout, nil)
 	delete(uniform.frames)
 }
+
+
+create_pipeline_layout :: proc(device: vk.Device, layouts: []vk.DescriptorSetLayout, ranges: []vk.PushConstantRange) -> (layout: vk.PipelineLayout){
+
+	create_info: vk.PipelineLayoutCreateInfo = {
+		sType = .PIPELINE_LAYOUT_CREATE_INFO,
+		setLayoutCount = u32(len(layouts)),
+		pSetLayouts = raw_data(layouts),
+		pushConstantRangeCount = u32(len(ranges)),
+		pPushConstantRanges = raw_data(ranges),
+	}
+
+	if(vk.CreatePipelineLayout(device, &create_info, nil, &layout) != .SUCCESS){
+		panic("failed to create pipeline layout")
+	}
+
+	return
+}
+
 
 
 

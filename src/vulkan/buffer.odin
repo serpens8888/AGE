@@ -4,13 +4,13 @@ import vk "vendor:vulkan"
 import vma "../vma"
 import "core:mem"
 
-vk_buffer :: struct{
+Buffer :: struct{
 	handle: vk.Buffer,
 	memory: vma.Allocation,
 }
 
 
-create_buffer :: proc(allocator: vma.Allocator, size: vk.DeviceSize, usage: vk.BufferUsageFlags, properties: vk.MemoryPropertyFlags) -> vk_buffer{
+create_buffer :: proc(allocator: vma.Allocator, size: vk.DeviceSize, usage: vk.BufferUsageFlags, properties: vk.MemoryPropertyFlags) -> Buffer{
 
 	bci: vk.BufferCreateInfo = {
 		sType = .BUFFER_CREATE_INFO,
@@ -25,64 +25,22 @@ create_buffer :: proc(allocator: vma.Allocator, size: vk.DeviceSize, usage: vk.B
 		required_flags = properties,
 	}
 
-	buffer: vk_buffer
+	buffer: Buffer
 
 	vma.create_buffer(allocator, bci, aci, &buffer.handle, &buffer.memory, {})
 
 	return buffer
 }
 
-
-find_memory_type :: proc(gpu: vk.PhysicalDevice, type_filter: u32, properties: vk.MemoryPropertyFlags) -> u32{
-	mem_properties: vk.PhysicalDeviceMemoryProperties
-	vk.GetPhysicalDeviceMemoryProperties(gpu, &mem_properties)
-
-	for i in 0..<mem_properties.memoryTypeCount{
-		if(type_filter & (1<<i) != 0 && (mem_properties.memoryTypes[i].propertyFlags & properties) == properties){
-			return u32(i)
-		}
-	}
-	panic("failed to find suitable device memory")
-}
-
-
-
-
 copy_buffer :: proc(ctx: ^vk_context, src: vk.Buffer, dst: vk.Buffer, size: vk.DeviceSize){
-	alloc_info: vk.CommandBufferAllocateInfo = {
-		sType = .COMMAND_BUFFER_ALLOCATE_INFO,
-		level = .PRIMARY,
-		commandPool = ctx.queues.pools.transfer,
-		commandBufferCount = 1,
-	}
-	
-	cmd_buffer: vk.CommandBuffer
-	vk.AllocateCommandBuffers(ctx.device, &alloc_info, &cmd_buffer)
-
-	begin_info: vk.CommandBufferBeginInfo = {
-		sType = .COMMAND_BUFFER_BEGIN_INFO,
-		flags = {.ONE_TIME_SUBMIT}
-	}
-
+	cmd_buf := begin_single_time_command(ctx.device, ctx.queues.pools.transfer)
 	copy_region: vk.BufferCopy = {
 		srcOffset = 0,
 		dstOffset = 0,
 		size = size,
 	}
-
-	vk.BeginCommandBuffer(cmd_buffer, &begin_info)
-	vk.CmdCopyBuffer(cmd_buffer, src, dst, 1, &copy_region)
-	vk.EndCommandBuffer(cmd_buffer)
-
-	submit_info: vk.SubmitInfo = {
-		sType = .SUBMIT_INFO,
-		commandBufferCount = 1,
-		pCommandBuffers = &cmd_buffer,
-	}
-
-	vk.QueueSubmit(ctx.queues.transfer_queue, 1, &submit_info, {})
-	vk.QueueWaitIdle(ctx.queues.transfer_queue) //not optimal?
-	vk.FreeCommandBuffers(ctx.device, ctx.queues.pools.transfer, 1, &cmd_buffer)
+	vk.CmdCopyBuffer(cmd_buf, src, dst, 1, &copy_region)
+	end_single_time_command(ctx.device, ctx.queues.pools.transfer, ctx.queues.transfer_queue, &cmd_buf)
 }
 
 create_command_buffers :: proc(device: vk.Device, pool: vk.CommandPool, count: u32) -> []vk.CommandBuffer{
@@ -93,7 +51,7 @@ create_command_buffers :: proc(device: vk.Device, pool: vk.CommandPool, count: u
 		commandBufferCount = count,
 	}
 	
-	buffers := make([]vk.CommandBuffer, 3)
+	buffers := make([]vk.CommandBuffer, count)
 
 	if(vk.AllocateCommandBuffers(device, &alloc_info, raw_data(buffers)) != .SUCCESS){
 		panic("failed to create command buffers")
@@ -101,3 +59,47 @@ create_command_buffers :: proc(device: vk.Device, pool: vk.CommandPool, count: u
 
 	return buffers
 }
+
+begin_single_time_command :: proc(device: vk.Device, pool: vk.CommandPool) -> vk.CommandBuffer{
+	cmd_buf_slice := create_command_buffers(device, pool, 1)
+	cmd_buf := cmd_buf_slice[0]
+	delete(cmd_buf_slice)
+
+	begin_info: vk.CommandBufferBeginInfo = {
+		sType = .COMMAND_BUFFER_BEGIN_INFO,
+		flags = {.ONE_TIME_SUBMIT},
+	}
+
+	vk.BeginCommandBuffer(cmd_buf, &begin_info)
+
+	return cmd_buf
+}
+
+end_single_time_command :: proc(device: vk.Device, pool: vk.CommandPool, queue: vk.Queue, cmd_buf: ^vk.CommandBuffer){
+	vk.EndCommandBuffer(cmd_buf^)
+
+	submit_info: vk.SubmitInfo = {
+		sType = .SUBMIT_INFO,
+		commandBufferCount = 1,
+		pCommandBuffers = cmd_buf
+	}
+
+	vk.QueueSubmit(queue, 1, &submit_info, 0)
+	vk.QueueWaitIdle(queue)
+	vk.FreeCommandBuffers(device, pool, 1, cmd_buf)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
