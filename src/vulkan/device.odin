@@ -173,11 +173,26 @@ select_gpu :: proc(ctx: ^vk_context){
 
 	gpu := pick_gpu(gpus, ctx^)
 
-	gpu_properties: vk.PhysicalDeviceProperties
-	vk.GetPhysicalDeviceProperties(gpu, &gpu_properties)
-	fmt.println("selected gpu: ", string(gpu_properties.deviceName[:]))
+
+
+	descriptor_buffer_properties := new(vk.PhysicalDeviceDescriptorBufferPropertiesEXT) 
+	descriptor_buffer_properties^ = {
+		sType = .PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT,
+	}
+
+	gpu_properties := new(vk.PhysicalDeviceProperties2)
+	gpu_properties^ = {
+		sType = .PHYSICAL_DEVICE_PROPERTIES_2,
+		pNext = descriptor_buffer_properties,
+	}
+
+	vk.GetPhysicalDeviceProperties2(gpu, gpu_properties)
+
+
+	fmt.println("selected gpu: ", string(gpu_properties.properties.deviceName[:]))
 
 	ctx.gpu = gpu
+	ctx.gpu_properties = {gpu_properties, descriptor_buffer_properties}
 }
 
 
@@ -226,10 +241,13 @@ pick_gpu :: proc(gpus: []vk.PhysicalDevice, ctx: vk_context) -> vk.PhysicalDevic
 		requested_exts :[]cstring = {
 			"VK_KHR_swapchain",
 			"VK_KHR_dynamic_rendering",
+			"VK_KHR_buffer_device_address",
+
 			"VK_EXT_shader_object",
 			"VK_EXT_descriptor_buffer",
+			"VK_EXT_descriptor_indexing",
+
 			"VK_AMD_device_coherent_memory",
-			"VK_KHR_buffer_device_address"
 		}
 
 		
@@ -377,16 +395,28 @@ create_device :: proc(ctx: ^vk_context){
 
 
 
-	//dynamic rendering is in core
+	vulkan_features11: vk.PhysicalDeviceVulkan11Features = {
+		sType = .PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+	};
+
+	vulkan_features12: vk.PhysicalDeviceVulkan12Features = {
+		sType = .PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+		runtimeDescriptorArray = true,
+		bufferDeviceAddress = true,
+		descriptorIndexing = true,
+	};
+
+	vulkan_features13: vk.PhysicalDeviceVulkan13Features = {
+		sType = .PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+		dynamicRendering = true,
+	};
+
+
 	features2: vk.PhysicalDeviceFeatures2 = {
 		sType = .PHYSICAL_DEVICE_FEATURES_2,
 		features = {
 			samplerAnisotropy = true,
 		}
-	}
-	dynamic_rendering: vk.PhysicalDeviceDynamicRenderingFeaturesKHR = {
-		sType = .PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR,
-		dynamicRendering = true,
 	}
 	shader_obj: vk.PhysicalDeviceShaderObjectFeaturesEXT = {
 		sType = .PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT,
@@ -400,26 +430,31 @@ create_device :: proc(ctx: ^vk_context){
 		sType = .PHYSICAL_DEVICE_COHERENT_MEMORY_FEATURES_AMD,
 		deviceCoherentMemory = true,
 	}
-	buffer_device_address: vk.PhysicalDeviceBufferDeviceAddressFeatures = {
-		sType = .PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES,
-		bufferDeviceAddress = true,
+	desc_indexing: vk.PhysicalDeviceDescriptorIndexingFeaturesEXT = {
+		sType = .PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT,
+		shaderUniformBufferArrayNonUniformIndexing = true,
+		shaderSampledImageArrayNonUniformIndexing = true,
 	}
 
-
-	features2.pNext = &dynamic_rendering
-	dynamic_rendering.pNext = &shader_obj
+	features2.pNext = &vulkan_features11;
+	vulkan_features11.pNext = &vulkan_features12;
+	vulkan_features12.pNext = &vulkan_features13;
+	vulkan_features13.pNext = &shader_obj;  
 	shader_obj.pNext = &desc_buf
 	desc_buf.pNext = &coherent_memory
-	coherent_memory.pNext = &buffer_device_address
+	//coherent_memory.pNext = 
 
 
 	device_exts :[]cstring = {
 		"VK_KHR_swapchain",
-		"VK_KHR_dynamic_rendering", 
-		"VK_EXT_shader_object", 
-		"VK_EXT_descriptor_buffer", 
+		"VK_KHR_dynamic_rendering",
+		"VK_KHR_buffer_device_address",
+
+		"VK_EXT_shader_object",
+		"VK_EXT_descriptor_buffer",
+		"VK_EXT_descriptor_indexing",
+
 		"VK_AMD_device_coherent_memory",
-		"VK_KHR_buffer_device_address"
 	}
 
 	

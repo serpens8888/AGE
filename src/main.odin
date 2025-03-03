@@ -48,58 +48,16 @@ main :: proc() {
 
 	vulk.compile_shader("foo.slang")
 
-verts: []vulk.Vertex = {
-    // Back face (z = -0.5)
-    {pos = {-0.5, -0.5, -0.5}, uv = {0, 1}},
-    {pos = { 0.5, -0.5, -0.5}, uv = {1, 1}},
-    {pos = { 0.5,  0.5, -0.5}, uv = {1, 0}},
-    {pos = {-0.5,  0.5, -0.5}, uv = {0, 0}},
-    
-    // Front face (z = 0.5)
-    {pos = {-0.5, -0.5, 0.5}, uv = {0, 1}},
-    {pos = { 0.5, -0.5, 0.5}, uv = {1, 1}},
-    {pos = { 0.5,  0.5, 0.5}, uv = {1, 0}},
-    {pos = {-0.5,  0.5, 0.5}, uv = {0, 0}},
-    
-    // Left face (x = -0.5)
-    {pos = {-0.5, -0.5, -0.5}, uv = {0, 1}},
-    {pos = {-0.5, -0.5,  0.5}, uv = {1, 1}},
-    {pos = {-0.5,  0.5,  0.5}, uv = {1, 0}},
-    {pos = {-0.5,  0.5, -0.5}, uv = {0, 0}},
-    
-    // Right face (x = 0.5)
-    {pos = {0.5, -0.5, 0.5}, uv = {0, 1}},
-    {pos = {0.5, -0.5, -0.5}, uv = {1, 1}},
-    {pos = {0.5,  0.5, -0.5}, uv = {1, 0}},
-    {pos = {0.5,  0.5, 0.5}, uv = {0, 0}},
-    
-    // Top face (y = 0.5)
-    {pos = {-0.5, 0.5, 0.5}, uv = {0, 0}},
-    {pos = { 0.5, 0.5, 0.5}, uv = {1, 0}},
-    {pos = { 0.5, 0.5, -0.5}, uv = {1, 1}},
-    {pos = {-0.5, 0.5, -0.5}, uv = {0, 1}},
-    
-    // Bottom face (y = -0.5)
-    {pos = {-0.5, -0.5, -0.5}, uv = {0, 1}},
-    {pos = { 0.5, -0.5, -0.5}, uv = {1, 1}},
-    {pos = { 0.5, -0.5,  0.5}, uv = {1, 0}},
-    {pos = {-0.5, -0.5,  0.5}, uv = {0, 0}},
-}
+	verts: []vulk.Vertex = {
+		{pos = {-0.5, -0.5, 0.0}, uv = {0, 1}},
+		{pos = {0.5, -0.5, 0.0}, uv = {1, 1}},
+		{pos = {0.5, 0.5, 0.0}, uv = {1, 0}},
+		{pos = {-0.5, 0.5, 0.0}, uv = {0, 0}},
+	}
 
-indices: []u32 = {
-    // Back face
-    0, 1, 2,  0, 2, 3,
-    // Front face
-    4, 5, 6,  4, 6, 7,
-    // Left face
-    8, 9, 10, 8, 10, 11,
-    // Right face
-    12, 13, 14, 12, 14, 15,
-    // Top face
-    16, 17, 18, 16, 18, 19,
-    // Bottom face
-    20, 21, 22, 20, 22, 23,
-}
+	indices: []u32 = {
+		0, 1, 2, 2, 3, 0,
+	}
  
 	vma_vk_functions := vma.create_vulkan_functions()
 
@@ -118,21 +76,33 @@ indices: []u32 = {
 		return
 	}
 	defer vma.destroy_allocator(allocator)
+	
+	ubo := vulk.create_uniform_buffer(ctx.device, allocator, u32(render_state.frames_in_flight), vulk.ubo)
+	defer vulk.destroy_uniform_buffer(allocator, ubo)
+
+	curr_offset: u32
+	ubo_pc := vulk.create_push_constant(vk.DeviceAddress, {.FRAGMENT, .VERTEX}, &curr_offset)
 
 	vbuf := vulk.create_vertex_buffer(&ctx, allocator, verts)
 	ibuf := vulk.create_index_buffer(&ctx, allocator, indices)
 
-	uniform := vulk.create_uniform(ctx.device, &render_state, allocator, vulk.ubo, 0)
-	defer vulk.destroy_uniform(ctx.device, allocator, &uniform)
+	base_sampler := vulk.create_sampler(ctx.device, ctx.gpu)
+	defer vk.DestroySampler(ctx.device, base_sampler.handle, nil)
 
-	texture := vulk.create_texture(&ctx, &render_state, allocator, "assets/images/electronics.png", 1)
+	texture := vulk.create_texture(&ctx, allocator, "assets/images/electronics.png", 1)
 	defer vulk.destroy_texture(ctx.device, allocator, &texture)
+	
+	textures := []^vulk.Texture{&texture}
+	samplers := []^vulk.Sampler{&base_sampler}
+	arr := vulk.create_texture_array(&ctx, allocator, {.FRAGMENT, .VERTEX}, textures, samplers)
+	defer vma.destroy_buffer(allocator, arr.buffer.handle, arr.buffer.memory)
+	defer vk.DestroyDescriptorSetLayout(ctx.device, arr.layout, nil)
 
-	pipeline_layout := vulk.create_pipeline_layout(ctx.device, {uniform.layout, texture.uniform.layout}, {})
+	pipeline_layout := vulk.create_pipeline_layout(ctx.device, {arr.layout}, {ubo_pc.range})
 	defer vk.DestroyPipelineLayout(ctx.device, pipeline_layout, nil)
 
-	vert := vulk.create_tri_vert(ctx.device, {uniform.layout, texture.uniform.layout})
-	frag := vulk.create_tri_frag(ctx.device, {uniform.layout, texture.uniform.layout})
+	vert := vulk.create_tri_vert(ctx.device, {arr.layout}, {ubo_pc.range})
+	frag := vulk.create_tri_frag(ctx.device, {arr.layout}, {ubo_pc.range})
 
 	cmd_buffers: []vk.CommandBuffer = vulk.create_command_buffers(ctx.device, ctx.queues.pools.graphics, u32(render_state.frames_in_flight))
 
@@ -151,7 +121,7 @@ indices: []u32 = {
 		time.stopwatch_start(&stopwatch)
 		//////RENDER HERE//////
 
-		vulk.render_tri(&ctx, &render_state, cmd_buffers, vert, frag, &vbuf.handle, &ibuf.handle, &uniform, &texture, pipeline_layout)
+		vulk.render_tri(&ctx, &render_state, cmd_buffers, vert, frag, &vbuf.handle, &ibuf.handle, &arr, {&ubo_pc}, {ubo}, pipeline_layout)
 
 		////FINISH RENDER/////
 		time.stopwatch_stop(&stopwatch)

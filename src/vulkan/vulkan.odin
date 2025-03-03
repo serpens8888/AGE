@@ -49,10 +49,18 @@ display_objects :: struct {
 	swapchain_extent: vk.Extent2D,
 }
 
+
+GpuProperties :: struct{
+	//pointers into the heap since these structs are pretty sizeable
+	gpu: ^vk.PhysicalDeviceProperties2,
+	descriptor_buffer: ^vk.PhysicalDeviceDescriptorBufferPropertiesEXT,
+}
+
 vk_context :: struct {
 	instance: vk.Instance,
 	debug_messenger: vk.DebugUtilsMessengerEXT,
 	gpu: vk.PhysicalDevice,
+	gpu_properties: GpuProperties,
 	device: vk.Device,
 	queues: queue_manager,
 	display: display_objects
@@ -112,6 +120,9 @@ deinit_context :: proc(ctx: ^vk_context){
 
 	when ODIN_DEBUG{ vk.DestroyDebugUtilsMessengerEXT(ctx.instance, ctx.debug_messenger, nil) }
 	vk.DestroyInstance(ctx.instance, nil)
+
+	free(ctx.gpu_properties.gpu)
+	free(ctx.gpu_properties.descriptor_buffer)
 
 	sdl.DestroyWindow(ctx.display.window)
 	sdl.Quit()

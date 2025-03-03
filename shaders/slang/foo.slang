@@ -2,14 +2,10 @@ struct UBO{
 	float4x4 model;
 	float4x4 view;
 	float4x4 proj;
-	float time;
 };
 
-
-layout(set = 0, binding = 0) ConstantBuffer<UBO> ubo;
-layout(set = 1, binding = 1) uniform Sampler2D tex_sampler;
-
-
+layout(set = 0, binding = 0) uniform Texture2D []textures;
+layout(set = 0, binding = 1) uniform SamplerState []samplers;
 
 struct v_in{
 	[vk_location(0)] float3 pos;
@@ -25,14 +21,16 @@ struct v_out {
 };
 
 static const float pi = 3.1415926535;
-static float time = ubo.time;
 
 [shader("vertex")]
-v_out vertexMain(v_in input, uint vertexID : SV_VertexID){
+v_out vertexMain(v_in input, uniform UBO* ubo){
 	
 	v_out output;
 
+
 	output.pos =  mul(mul(mul(ubo.proj, ubo.view), ubo.model), float4(input.pos, 1.0));
+
+	//output.pos = {input.pos, 1.0};
 
 	output.uv = input.uv;
 
@@ -46,13 +44,13 @@ float4 fragmentMain(in v_out input) : SV_Target {
 	float2 uv = input.uv;
 	float4 pos = input.pos;
 
-	float r = abs(sin(time))/2*uv.x;
-	float g = abs(cos(time))/2*uv.y;
-	float b = abs(tan(time))/2*pos.z;
+	//float r = abs(sin(time))/2*uv.x;
+	//float g = abs(cos(time))/2*uv.y;
+	//float b = abs(tan(time))/2*pos.z;
 	
+	float4 col = textures[0].Sample(samplers[0], uv);
 
-
-	return float4(tex_sampler.Sample(uv));
+	return col;
 	
 
 

@@ -28,13 +28,12 @@ triangle :: struct{
 
 
 
-//uniforms
+//descriptors
 
 ubo :: struct{
 	model: matrix[4,4]f32,
 	view: matrix[4,4]f32,
 	proj: matrix[4,4]f32,
-	time: f32,
 }
 
 
@@ -73,7 +72,7 @@ read_spirv :: proc(filename: string) -> []u8{
 
 
 
-create_tri_vert :: proc(device: vk.Device, layouts: []vk.DescriptorSetLayout) -> vk.ShaderEXT{
+create_tri_vert :: proc(device: vk.Device, layouts: []vk.DescriptorSetLayout, ranges: []vk.PushConstantRange) -> vk.ShaderEXT{
 	spirv := read_spirv("foo.spv")
 	defer delete(spirv)
 
@@ -85,11 +84,11 @@ create_tri_vert :: proc(device: vk.Device, layouts: []vk.DescriptorSetLayout) ->
 		codeType = .SPIRV,
 		codeSize = len(spirv), // works becasue its read in bytes, len == size_of
 		pCode = transmute([^]u32)raw_data(spirv),
-		pName = "main",
+		pName = "vertexMain",
 		setLayoutCount = u32(len(layouts)),
 		pSetLayouts = raw_data(layouts),
-		pushConstantRangeCount = 0,
-		pPushConstantRanges = nil,
+		pushConstantRangeCount = u32(len(ranges)),
+		pPushConstantRanges = raw_data(ranges),
 		pSpecializationInfo = nil,
 	}
 	vert_shader: vk.ShaderEXT
@@ -97,7 +96,7 @@ create_tri_vert :: proc(device: vk.Device, layouts: []vk.DescriptorSetLayout) ->
 	return vert_shader
 }
 
-create_tri_frag :: proc(device: vk.Device, layouts: []vk.DescriptorSetLayout) -> vk.ShaderEXT{
+create_tri_frag :: proc(device: vk.Device, layouts: []vk.DescriptorSetLayout, ranges: []vk.PushConstantRange) -> vk.ShaderEXT{
 	spirv := read_spirv("foo.spv")
 	defer delete(spirv)
 
@@ -109,11 +108,11 @@ create_tri_frag :: proc(device: vk.Device, layouts: []vk.DescriptorSetLayout) ->
 		codeType = .SPIRV,
 		codeSize = len(spirv), // works becasue its read in bytes, len == size_of
 		pCode = transmute([^]u32)raw_data(spirv),
-		pName = "main",
+		pName = "fragmentMain",
 		setLayoutCount = u32(len(layouts)),
 		pSetLayouts = raw_data(layouts),
-		pushConstantRangeCount = 0,
-		pPushConstantRanges = nil,
+		pushConstantRangeCount = u32(len(ranges)),
+		pPushConstantRanges = raw_data(ranges),
 		pSpecializationInfo = nil,
 	}
 	frag_shader: vk.ShaderEXT
@@ -122,8 +121,9 @@ create_tri_frag :: proc(device: vk.Device, layouts: []vk.DescriptorSetLayout) ->
 
 }
 
+
 //command buffer recording
-record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer, uniform: ^Uniform, texture: ^Texture, pipeline_layout: vk.PipelineLayout, image_idx: u32, current_frame: uint){
+record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer, textures: ^Texture_Array, ranges: []^Push_Constant, pipeline_layout: vk.PipelineLayout, image_idx: u32, current_frame: uint){
 	begin_info: vk.CommandBufferBeginInfo
 	begin_info.sType = .COMMAND_BUFFER_BEGIN_INFO
 	vk.BeginCommandBuffer(cmd_buffer, &begin_info)
@@ -249,27 +249,42 @@ record_triangle_rendering :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer
 
 	vk.CmdSetVertexInputEXT(cmd_buffer, 1, &vertex_input_binding, u32(len(vertex_input_attributes)) , raw_data(vertex_input_attributes))
 
-	offsets := []vk.DeviceSize{0}
-	vk.CmdBindVertexBuffers(cmd_buffer, 0, 1, vbuf, raw_data(offsets))
+	vertex_offsets := []vk.DeviceSize{0}
+	vk.CmdBindVertexBuffers(cmd_buffer, 0, 1, vbuf, raw_data(vertex_offsets))
 
 	vk.CmdBindIndexBuffer(cmd_buffer, ibuf^, 0, .UINT32)
 
-	uniforms: []vk.DescriptorSet = {uniform.frames[current_frame].set, texture.uniform.frames[current_frame].set}
+	binding_info: vk.DescriptorBufferBindingInfoEXT = {
+		sType = .DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+		address = textures.address,
+		usage = {.SAMPLER_DESCRIPTOR_BUFFER_EXT, .RESOURCE_DESCRIPTOR_BUFFER_EXT, .SHADER_DEVICE_ADDRESS},
+	}
 
-	vk.CmdBindDescriptorSets(cmd_buffer, .GRAPHICS, pipeline_layout, 0, u32(len(uniforms)), raw_data(uniforms) , 0, nil)
+	vk.CmdBindDescriptorBuffersEXT(cmd_buffer, 1, &binding_info)
 
-	vk.CmdDrawIndexed(cmd_buffer, 36, 1, 0, 0, 0)
+	descriptor_offsets: []vk.DeviceSize = {textures.image_offset, textures.sampler_offset}
+
+	//since they are both in the same buffer at different bindings, 
+	//the pBufferIndices is 0,0 because they are in buffer 0 of the buffer array
+	descriptor_indices: []u32 = {0,0} 
+	
+	vk.CmdSetDescriptorBufferOffsetsEXT(cmd_buffer, .GRAPHICS, pipeline_layout, 0, 1, raw_data(descriptor_indices), raw_data(descriptor_offsets))
+
+	for range in ranges{
+		vk.CmdPushConstants(cmd_buffer, pipeline_layout, range.range.stageFlags, range.range.offset, range.range.size, rawptr(&range.data))
+	}
+
+	vk.CmdDrawIndexed(cmd_buffer, 6, 1, 0, 0, 0)
  
 	vk.CmdEndRendering(cmd_buffer)
 	vk.EndCommandBuffer(cmd_buffer)
 }
 
 //render 
-render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer, uniform: ^Uniform, texture: ^Texture, pipeline_layout: vk.PipelineLayout){
+render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []vk.CommandBuffer, vert: vk.ShaderEXT, frag: vk.ShaderEXT, vbuf: ^vk.Buffer, ibuf: ^vk.Buffer, texture_array: ^Texture_Array, ranges: []^Push_Constant, uniforms: [][]Uniform_Buffer, pipeline_layout: vk.PipelineLayout){
 	timeout: u64 : 100000000
 
 	vk.WaitForFences(ctx.device, 1, &state.in_flight_fences[state.current_frame], true, timeout)
-
 
 	image_index: u32
 	result := vk.AcquireNextImageKHR(ctx.device, ctx.display.swapchain, timeout,
@@ -287,9 +302,10 @@ render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []v
 
 	vk.ResetCommandBuffer(cmd_buffers[state.current_frame], {})
 
-	update_uniform_buffer(uniform.frames[state.current_frame].mapped_data, ctx)
+	update_descriptor_buffer(uniforms[0][state.current_frame].mapped_ptr, ctx)
+	ranges[0].data = uniforms[0][state.current_frame].address
 
-	record_triangle_rendering(ctx, cmd_buffers[state.current_frame], vert, frag, vbuf, ibuf, uniform, texture, pipeline_layout, image_index, state.current_frame)
+	record_triangle_rendering(ctx, cmd_buffers[state.current_frame], vert, frag, vbuf, ibuf, texture_array, ranges, pipeline_layout, image_index, state.current_frame)
 
 
 	wait_semaphores := []vk.Semaphore{state.image_available_semaphores[state.current_frame]}
@@ -337,22 +353,20 @@ render_tri :: proc(ctx: ^vk_context, state: ^render_loop_state, cmd_buffers: []v
 
 start_time := time.tick_now()
 
-update_uniform_buffer :: proc(dst: rawptr, ctx: ^vk_context){
+update_descriptor_buffer :: proc(dst: rawptr, ctx: ^vk_context){
 	curr_time := time.tick_now()
 	duration := time.tick_diff(start_time, curr_time)
 	seconds := time.duration_seconds(duration)
 
 	obj: ubo
-	obj.model = glsl.mat4Rotate( [3]f32{0.0,0.0,1.0}, math.PI/2 * f32(seconds)*2) //1 to stop the spinning
+	obj.model = glsl.mat4Rotate( [3]f32{0.0,0.0,1.0}, math.PI/2 * f32(seconds)*10) //1 to stop the spinning
 	obj.view = glsl.mat4LookAt( [3]f32{2, 2, 2}, [3]f32{0, 0, 0}, [3]f32{0, 0, 1} )
 	obj.proj = glsl.mat4Perspective(math.PI/4, f32(ctx.display.swapchain_extent.width) / f32(ctx.display.swapchain_extent.height), 0.1, 10)
 	obj.proj[1][1] *= -1
-	obj.time = f32(seconds)/3
 
 	mem.copy(dst, &obj, size_of(obj))
 
 }
-
 
 
 

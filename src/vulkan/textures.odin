@@ -11,15 +11,28 @@ import "core:log"
 
 
 Texture :: struct{
-	w: u32,
-	h: u32,
 	image: Image,
 	view: vk.ImageView,
-	sampler: vk.Sampler,
-	uniform: Uniform,
+	layout: vk.ImageLayout,
+	id: u32,
 }
 
-create_texture :: proc(ctx: ^vk_context, render_state: ^render_loop_state, allocator: vma.Allocator, filename: string, binding: u32) -> Texture{
+ImageInfo :: struct{
+	w: u32,
+	h: u32,
+	size: vk.DeviceSize,
+	format: vk.Format,
+	usage: vk.ImageUsageFlags,
+	properties: vk.MemoryPropertyFlags,
+}
+
+Image :: struct{
+	handle: vk.Image,
+	memory: vma.Allocation,
+}
+
+
+create_texture :: proc(ctx: ^vk_context, allocator: vma.Allocator, filename: string, sampler_id: u32) -> Texture{
 	image, err := png.load_from_file(filename, {.alpha_add_if_missing})
 	if(err != nil){ panic("failed to load image") }
 	defer img.destroy(image)
@@ -53,34 +66,8 @@ create_texture :: proc(ctx: ^vk_context, render_state: ^render_loop_state, alloc
 	end_single_time_command(ctx.device, ctx.queues.pools.graphics, ctx.queues.graphics_queue, &cmd_buffer)
 
 	image_view := create_image_view(ctx.device, tex_image.handle)
-	sampler := create_sampler(ctx.device, ctx.gpu)
-	uniform := create_texture_uniform(ctx.device, render_state, allocator, image_view, sampler, binding)
 
-	tex: Texture = {
-		w = u32(image.width),
-		h = u32(image.height),
-		image = tex_image,
-		view = image_view,
-		sampler = sampler,
-		uniform = uniform,
-	}
-
-	return tex
-}
-
-
-ImageInfo :: struct{
-	w: u32,
-	h: u32,
-	size: vk.DeviceSize,
-	format: vk.Format,
-	usage: vk.ImageUsageFlags,
-	properties: vk.MemoryPropertyFlags,
-}
-
-Image :: struct{
-	handle: vk.Image,
-	memory: vma.Allocation,
+	return {tex_image, image_view, .SHADER_READ_ONLY_OPTIMAL, 0}
 }
 
 create_image :: proc(ci: ^ImageInfo, allocator: vma.Allocator) -> Image{
@@ -139,22 +126,21 @@ transition_image_layout :: proc(ctx: ^vk_context, cmd_buffer: vk.CommandBuffer, 
 
 	src_stage: vk.PipelineStageFlags
 	dst_stage: vk.PipelineStageFlags
-	if(old_layout == .UNDEFINED && new_layout == .TRANSFER_DST_OPTIMAL){
 
-		barrier.srcAccessMask = {}
-		barrier.dstAccessMask = {.TRANSFER_WRITE}
-		src_stage = {.TOP_OF_PIPE}
-		dst_stage = {.TRANSFER}
-
-	} else if (old_layout == .TRANSFER_DST_OPTIMAL && new_layout == .SHADER_READ_ONLY_OPTIMAL){
-
-		barrier.srcAccessMask = {.TRANSFER_WRITE}
-		barrier.dstAccessMask = {.SHADER_READ}
-		src_stage = {.TRANSFER}
-		dst_stage = {.FRAGMENT_SHADER}
-	} else {
-		log.errorf("unsupported layout transition")
+	#partial switch old_layout{
+		case .UNDEFINED: {barrier.srcAccessMask = {}; src_stage = {.TOP_OF_PIPE}}
+		case .TRANSFER_DST_OPTIMAL: {barrier.srcAccessMask = {.TRANSFER_WRITE}; src_stage = {.TRANSFER}}
 	}
+
+	#partial switch new_layout{
+		case .TRANSFER_DST_OPTIMAL: {barrier.dstAccessMask = {.TRANSFER_WRITE}; dst_stage = {.TRANSFER}}
+		case .SHADER_READ_ONLY_OPTIMAL: {barrier.dstAccessMask = {.SHADER_READ}; dst_stage = {.FRAGMENT_SHADER}}
+	}
+
+	if((barrier.srcAccessMask == {} && src_stage == {}) || (barrier.dstAccessMask == {} && dst_stage == {})){
+		panic("unsupported layout transition")
+	}
+
 
 
 	vk.CmdPipelineBarrier(cmd_buffer, src_stage, dst_stage, {}, 0, nil, 0, nil, 1, &barrier)
@@ -204,7 +190,12 @@ create_image_view :: proc(device: vk.Device, image: vk.Image) -> (image_view: vk
 	return
 }
 
-create_sampler :: proc(device: vk.Device, gpu: vk.PhysicalDevice) -> (sampler: vk.Sampler){
+Sampler :: struct{
+	handle: vk.Sampler,
+	id: u32,
+}
+
+create_sampler :: proc(device: vk.Device, gpu: vk.PhysicalDevice) -> (sampler: Sampler){
 
 	properties: vk.PhysicalDeviceProperties
 	vk.GetPhysicalDeviceProperties(gpu, &properties)
@@ -228,7 +219,7 @@ create_sampler :: proc(device: vk.Device, gpu: vk.PhysicalDevice) -> (sampler: v
 		maxLod = 0.0,
 	}
 
-	if(vk.CreateSampler(device, &sampler_info, nil, &sampler) != .SUCCESS){
+	if(vk.CreateSampler(device, &sampler_info, nil, &sampler.handle) != .SUCCESS){
 		panic("failed to create texture sampler")
 	}
 
@@ -236,88 +227,110 @@ create_sampler :: proc(device: vk.Device, gpu: vk.PhysicalDevice) -> (sampler: v
 
 }
 
-create_texture_uniform :: proc(device: vk.Device, render_state: ^render_loop_state, allocator: vma.Allocator, view: vk.ImageView, sampler: vk.Sampler, binding: u32) -> Uniform{
-	uniform: Uniform
-	uniform.frames = make([]UniformBufferFrame, render_state.frames_in_flight)
+Texture_Array :: struct{
+	buffer: Buffer,
+	address: vk.DeviceAddress,
+	layout: vk.DescriptorSetLayout,
+	image_offset: vk.DeviceSize,
+	sampler_offset: vk.DeviceSize,
+}
 
-	layout_binding: vk.DescriptorSetLayoutBinding = {
-		binding = binding,
-		descriptorType = .COMBINED_IMAGE_SAMPLER,
-		descriptorCount = 1,
-		stageFlags = {.FRAGMENT},
-		pImmutableSamplers = {},
+create_texture_array :: proc(ctx: ^vk_context, allocator: vma.Allocator, stage_flags: vk.ShaderStageFlags, textures: []^Texture, samplers: []^Sampler) -> Texture_Array{
+
+	image_binding: vk.DescriptorSetLayoutBinding = {
+		binding = 0,
+		descriptorType = .SAMPLED_IMAGE,
+		descriptorCount = u32(len(textures)),
+		stageFlags = stage_flags,
 	}
 
-	layout_info: vk.DescriptorSetLayoutCreateInfo = {
+	sampler_binding: vk.DescriptorSetLayoutBinding = {
+		binding = 1,
+		descriptorType = .SAMPLER,
+		descriptorCount = u32(len(samplers)),
+		stageFlags = stage_flags,
+	}
+
+	bindings: []vk.DescriptorSetLayoutBinding = {image_binding, sampler_binding}
+	layout_create_info: vk.DescriptorSetLayoutCreateInfo = {
 		sType = .DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		bindingCount = 1,
-		pBindings = &layout_binding,
+		flags = {.DESCRIPTOR_BUFFER_EXT},
+		bindingCount = u32(len(bindings)),
+		pBindings = raw_data(bindings),
 	}
-
-	if( vk.CreateDescriptorSetLayout(device, &layout_info, nil, &uniform.layout) != .SUCCESS){
+	
+	layout: vk.DescriptorSetLayout
+	result := vk.CreateDescriptorSetLayout(ctx.device, &layout_create_info, nil, &layout)
+	if(result != .SUCCESS){
+		fmt.println(result)
 		panic("failed to create descriptor set layout")
 	}
 
+	size: vk.DeviceSize
+	vk.GetDescriptorSetLayoutSizeEXT(ctx.device, layout, &size)
+	size = align_size(size, ctx.gpu_properties.descriptor_buffer.descriptorBufferOffsetAlignment)
 
-	pool_size: vk.DescriptorPoolSize = {
-		type = .COMBINED_IMAGE_SAMPLER,
-		descriptorCount = u32(render_state.frames_in_flight),
+	image_offset: vk.DeviceSize
+	sampler_offset: vk.DeviceSize
+	vk.GetDescriptorSetLayoutBindingOffsetEXT(ctx.device, layout, 0, &image_offset)
+	vk.GetDescriptorSetLayoutBindingOffsetEXT(ctx.device, layout, 1, &sampler_offset)
+
+	buffer := create_buffer(allocator, size, {.SAMPLER_DESCRIPTOR_BUFFER_EXT, .RESOURCE_DESCRIPTOR_BUFFER_EXT, .SHADER_DEVICE_ADDRESS}, {.HOST_VISIBLE, .HOST_COHERENT})
+
+	info: vk.BufferDeviceAddressInfo = {
+		sType = .BUFFER_DEVICE_ADDRESS_INFO,
+		buffer = buffer.handle,
 	}
 
-	pool_info: vk.DescriptorPoolCreateInfo = {
-		sType = .DESCRIPTOR_POOL_CREATE_INFO,
-		poolSizeCount = 1,
-		pPoolSizes = &pool_size,
-		maxSets = u32(render_state.frames_in_flight)
+	buffer_address := vk.GetBufferDeviceAddress(ctx.device, &info)
+
+	mapped_ptr: rawptr
+	vma.map_memory(allocator, buffer.memory, &mapped_ptr)
+	defer vma.unmap_memory(allocator, buffer.memory)
+
+	for &image, i in textures{
+		image_info: vk.DescriptorImageInfo = { {}, image.view, image.layout}
+		textures[i].id = u32(i+5)
+
+
+		descriptor_info: vk.DescriptorGetInfoEXT = {
+			sType = .DESCRIPTOR_GET_INFO_EXT,
+			type = .SAMPLED_IMAGE,
+			data = {pSampledImage = &image_info},
+		}
+
+		offset := vk.DeviceSize(i * ctx.gpu_properties.descriptor_buffer.sampledImageDescriptorSize) + image_offset
+		dst := rawptr(uintptr(mapped_ptr) + uintptr(offset))
+		vk.GetDescriptorEXT(ctx.device, &descriptor_info, ctx.gpu_properties.descriptor_buffer.sampledImageDescriptorSize, dst)
+
 	}
 
-	if(vk.CreateDescriptorPool(device, &pool_info, nil, &uniform.pool) != .SUCCESS){
-		panic("failed to create descriptor pool")
+	for &sampler, i in samplers{
+		sampler_info: vk.DescriptorImageInfo = {sampler.handle, {}, {}}
+		sampler.id = u32(i)
+
+		descriptor_info: vk.DescriptorGetInfoEXT = {
+			sType = .DESCRIPTOR_GET_INFO_EXT,
+			type = .SAMPLER,
+			data = {pSampledImage = &sampler_info},
+		}
+
+		offset := vk.DeviceSize(i * ctx.gpu_properties.descriptor_buffer.samplerDescriptorSize) + sampler_offset
+		dst := rawptr(uintptr(mapped_ptr) + uintptr(offset))
+		vk.GetDescriptorEXT(ctx.device, &descriptor_info, ctx.gpu_properties.descriptor_buffer.samplerDescriptorSize, dst)
+
 	}
 
 
 
-	for i in 0..<len(uniform.frames){
-		
-		ai: vk.DescriptorSetAllocateInfo = {
-			sType = .DESCRIPTOR_SET_ALLOCATE_INFO,
-			descriptorPool = uniform.pool,
-			descriptorSetCount = 1,
-			pSetLayouts = &uniform.layout,
-		}
 
-		if(vk.AllocateDescriptorSets(device, &ai, &uniform.frames[i].set) != .SUCCESS){
-			panic("failed to allocate descriptor sets")
-		}
-
-		image_info: vk.DescriptorImageInfo = {
-			imageLayout = .SHADER_READ_ONLY_OPTIMAL,
-			imageView = view,
-			sampler = sampler,
-		}
-
-		desc_write: vk.WriteDescriptorSet = {
-			sType = .WRITE_DESCRIPTOR_SET,
-			dstSet = uniform.frames[i].set,
-			dstBinding = binding,
-			dstArrayElement = 0,
-			descriptorType = .COMBINED_IMAGE_SAMPLER,
-			descriptorCount = 1,
-			pImageInfo = &image_info,
-		}
-
-		vk.UpdateDescriptorSets(device, 1, &desc_write, 0, nil)
-	}
-
-	return uniform
+	return {buffer, buffer_address, layout, image_offset, sampler_offset}
 }
 
 
 destroy_texture :: proc(device: vk.Device, allocator: vma.Allocator, tex: ^Texture){
 	vma.destroy_image(allocator, tex.image.handle, tex.image.memory)
 	vk.DestroyImageView(device, tex.view, nil)
-	vk.DestroySampler(device, tex.sampler, nil)
-	destroy_uniform(device, allocator, &tex.uniform)
 }
 
 
