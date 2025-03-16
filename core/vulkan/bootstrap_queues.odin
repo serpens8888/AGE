@@ -4,8 +4,6 @@ import vk "vendor:vulkan"
 import "core:fmt"
 import "core:mem"
 
-import "../utils"
-
 @(require_results)
 enumerate_queues :: proc(gpu: vk.PhysicalDevice) -> (queues: []GPU_Queue, alloc_err: mem.Allocator_Error){
     
@@ -93,7 +91,7 @@ get_separate_sparse_binding_queue :: proc(queues: ^[]GPU_Queue) -> (compute_queu
 
 @(require_results)
 query_presentation_support :: proc(queue: GPU_Queue, gpu: vk.PhysicalDevice, surface: vk.SurfaceKHR) -> (present_support: b32){
-    utils.check_vk(vk.GetPhysicalDeviceSurfaceSupportKHR(gpu, u32(queue.family), surface, &present_support))
+    check_vk(vk.GetPhysicalDeviceSurfaceSupportKHR(gpu, u32(queue.family), surface, &present_support))
     return
 }
 
@@ -110,7 +108,7 @@ create_command_pool :: proc(device: vk.Device, gpu_queue: GPU_Queue) -> (pool: v
         queueFamilyIndex = gpu_queue.family,
     }
 
-    utils.check_vk(vk.CreateCommandPool(device, &create_info, nil, &pool))
+    check_vk(vk.CreateCommandPool(device, &create_info, nil, &pool))
 
     return
 }

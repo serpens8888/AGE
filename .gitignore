@@ -9,7 +9,6 @@
 *.bin
 *.pdb
 src/odin-vma/
-core/vulkan/vma/
 my_gpu_limits.md
 .vs
 

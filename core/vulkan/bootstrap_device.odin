@@ -6,8 +6,6 @@ import "core:mem"
 import "core:strings"
 import "core:log"
 
-import "../utils"
-
 
 
 @(require_results)
@@ -151,7 +149,7 @@ create_logical_device :: proc(gpu: vk.PhysicalDevice, queues: []GPU_Queue, requi
 		enabledExtensionCount = u32(len(required_extensions)),
     }
 
-    utils.check_vk(vk.CreateDevice(gpu, &device_create_info, nil, &device))
+    check_vk(vk.CreateDevice(gpu, &device_create_info, nil, &device))
 
     return
 }

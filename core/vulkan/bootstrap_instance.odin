@@ -7,12 +7,10 @@ import "core:strings"
 import "core:reflect"
 import "base:runtime"
 
-import "../utils"
-
 @(require_results)
 create_instance :: proc() -> (instance: vk.Instance, alloc_err: mem.Allocator_Error){
 	version: u32
-	utils.check_vk(vk.EnumerateInstanceVersion(&version))
+	check_vk(vk.EnumerateInstanceVersion(&version))
 	major := (version >> 22) & 0x7F
 	minor := (version >> 12) & 0x3FF
 	patch := version & 0xFFF
@@ -60,7 +58,7 @@ create_instance :: proc() -> (instance: vk.Instance, alloc_err: mem.Allocator_Er
 		create_info.pNext = &debug_info
 	}
 
-	utils.check_vk(vk.CreateInstance(&create_info, nil, &instance))
+	check_vk(vk.CreateInstance(&create_info, nil, &instance))
 
 
 	return
@@ -188,7 +186,7 @@ create_debug_messenger :: proc(instance: vk.Instance) -> (debug_messenger: vk.De
 
 	ci := get_debug_messenger_create_info()
 
-	utils.check_vk(vk.CreateDebugUtilsMessengerEXT(instance, &ci, nil, &debug_messenger))
+	check_vk(vk.CreateDebugUtilsMessengerEXT(instance, &ci, nil, &debug_messenger))
 
 	return
 }

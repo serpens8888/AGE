@@ -2,7 +2,6 @@ package vulk
 
 import vk "vendor:vulkan"
 import "vma"
-import "../utils"
 import "core:slice"
 import "core:os"
 import "core:fmt"
@@ -31,7 +30,7 @@ allocate_buffer :: proc(
         required_flags = mem_properties,
     }
 
-    utils.check_vk(vma.create_buffer(allocator,
+    check_vk(vma.create_buffer(allocator,
         buffer_info^,
         allocation_create_info,
         &buffer.handle,
@@ -63,7 +62,7 @@ allocate_image :: proc(
         required_flags = mem_properties
     }
 
-    utils.check_vk(vma.create_image(allocator, image_info, allocation_create_info, &image.handle, &image.allocation, &image.alloc_info))
+    check_vk(vma.create_image(allocator, image_info, allocation_create_info, &image.handle, &image.allocation, &image.alloc_info))
 
     return
 }
@@ -73,7 +72,7 @@ create_uniform_buffer :: proc(device: vk.Device, allocator: vma.Allocator, size:
     buffer_info := make_buffer_create_info(size, {})
     buffer = allocate_buffer(allocator, &buffer_info, {.UNIFORM_BUFFER, .SHADER_DEVICE_ADDRESS}, {.HOST_VISIBLE, .HOST_COHERENT})
 
-    utils.check_vk(vma.map_memory(allocator, buffer.allocation, &buffer.mapped_ptr))
+    check_vk(vma.map_memory(allocator, buffer.allocation, &buffer.mapped_ptr))
 
     address_info: vk.BufferDeviceAddressInfo = {
         sType = .BUFFER_DEVICE_ADDRESS_INFO,
@@ -90,7 +89,7 @@ create_storage_buffer :: proc(device: vk.Device, allocator: vma.Allocator, size:
     buffer_info := make_buffer_create_info(size, {})
     buffer = allocate_buffer(allocator, &buffer_info, {.STORAGE_BUFFER, .SHADER_DEVICE_ADDRESS}, {.HOST_VISIBLE, .HOST_COHERENT})
 
-    utils.check_vk(vma.map_memory(allocator, buffer.allocation, &buffer.mapped_ptr))
+    check_vk(vma.map_memory(allocator, buffer.allocation, &buffer.mapped_ptr))
 
     address_info: vk.BufferDeviceAddressInfo = {
         sType = .BUFFER_DEVICE_ADDRESS_INFO,
@@ -114,7 +113,7 @@ create_pipeline_layout :: proc(device: vk.Device, layouts: []vk.DescriptorSetLay
         pPushConstantRanges = raw_data(ranges),
     }
 
-    utils.check_vk(vk.CreatePipelineLayout(device, &create_info, nil, &layout))
+    check_vk(vk.CreatePipelineLayout(device, &create_info, nil, &layout))
 
     return
 }
@@ -153,7 +152,7 @@ create_shader_object :: proc(
         pSpecializationInfo = specialization,
     }
 
-    utils.check_vk(vk.CreateShadersEXT(device, 1, &shader_info, nil, &shader))
+    check_vk(vk.CreateShadersEXT(device, 1, &shader_info, nil, &shader))
 
     return
 

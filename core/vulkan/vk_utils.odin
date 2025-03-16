@@ -1,4 +1,4 @@
-package util
+package vulk
 
 import vk "vendor:vulkan"
 import "core:fmt"

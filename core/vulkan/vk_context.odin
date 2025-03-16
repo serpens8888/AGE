@@ -2,7 +2,6 @@ package vulk
 
 import vk "vendor:vulkan"
 import "vma"
-import "../utils"
 import sdl "vendor:sdl3"
 import "core:mem"
 import "core:fmt"
@@ -197,7 +196,7 @@ init_context :: proc(ctx: ^Context($T), flags: Context_Flags) -> (alloc_err: mem
 	}
 
 
-	utils.check_vk(vma.create_allocator(allocator_create_info, &ctx.allocator))
+	check_vk(vma.create_allocator(allocator_create_info, &ctx.allocator))
 
     return
 }

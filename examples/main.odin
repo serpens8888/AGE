@@ -10,7 +10,6 @@ import vk "vendor:vulkan"
 import sdl "vendor:sdl3"
 import vulk "../core/vulkan"
 import "../core/vulkan/vma"
-import "../core/utils"
 
 
 
@@ -39,7 +38,7 @@ main :: proc(){
     assert(vulk.init_context(&ctx, {}) == nil)
     defer vulk.destroy_context(&ctx)
 
-    utils.compile_slang("main.slang", "main.spv")
+    vulk.compile_slang("main.slang", "main.spv")
 
     output := vulk.create_storage_buffer(ctx.device, ctx.allocator, size_of(i32)*10)
     defer vulk.free_buffer(ctx.allocator, output)

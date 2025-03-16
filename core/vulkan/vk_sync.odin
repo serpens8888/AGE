@@ -2,7 +2,6 @@ package vulk
 
 import vk "vendor:vulkan"
 import "vma"
-import "../utils"
 
 
 create_fence :: proc(device: vk.Device, flags: vk.FenceCreateFlags) -> (fence: vk.Fence){
@@ -11,7 +10,7 @@ create_fence :: proc(device: vk.Device, flags: vk.FenceCreateFlags) -> (fence: v
         flags = flags,
     }
 
-    utils.check_vk(vk.CreateFence(device, &create_info, nil, &fence))
+    check_vk(vk.CreateFence(device, &create_info, nil, &fence))
 
     return
 
@@ -22,7 +21,7 @@ create_semaphore :: proc(device: vk.Device) -> (sem: vk.Semaphore){
         sType = .SEMAPHORE_CREATE_INFO,
     }
 
-    utils.check_vk(vk.CreateSemaphore(device, &create_info, nil, &sem))
+    check_vk(vk.CreateSemaphore(device, &create_info, nil, &sem))
 
     return
 }
@@ -39,7 +38,7 @@ create_tpyed_semaphore :: proc(device: vk.Device, type: vk.SemaphoreType, initia
         pNext = &type_create_info,
     }
 
-    utils.check_vk(vk.CreateSemaphore(device, &create_info, nil, &sem))
+    check_vk(vk.CreateSemaphore(device, &create_info, nil, &sem))
 
     return
 }
