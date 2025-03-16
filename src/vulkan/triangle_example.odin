@@ -34,6 +34,7 @@ ubo :: struct{
 	model: matrix[4,4]f32,
 	view: matrix[4,4]f32,
 	proj: matrix[4,4]f32,
+	time: f32,
 }
 
 
@@ -83,7 +84,8 @@ create_tri_vert :: proc(device: vk.Device, layouts: []vk.DescriptorSetLayout, ra
 		nextStage = {.FRAGMENT},
 		codeType = .SPIRV,
 		codeSize = len(spirv), // works becasue its read in bytes, len == size_of
-		pCode = transmute([^]u32)raw_data(spirv),
+		//pCode = transmute([^]u32)raw_data(spirv),
+		pCode = raw_data(spirv),
 		pName = "vertexMain",
 		setLayoutCount = u32(len(layouts)),
 		pSetLayouts = raw_data(layouts),
@@ -359,10 +361,11 @@ update_descriptor_buffer :: proc(dst: rawptr, ctx: ^vk_context){
 	seconds := time.duration_seconds(duration)
 
 	obj: ubo
-	obj.model = glsl.mat4Rotate( [3]f32{0.0,0.0,1.0}, math.PI/2 * f32(seconds)*10) //1 to stop the spinning
+	obj.model = glsl.mat4Rotate( [3]f32{0.0,0.0,1.0}, math.PI/2 * f32(seconds)*2) //1 to stop the spinning
 	obj.view = glsl.mat4LookAt( [3]f32{2, 2, 2}, [3]f32{0, 0, 0}, [3]f32{0, 0, 1} )
 	obj.proj = glsl.mat4Perspective(math.PI/4, f32(ctx.display.swapchain_extent.width) / f32(ctx.display.swapchain_extent.height), 0.1, 10)
 	obj.proj[1][1] *= -1
+	obj.time = f32(seconds)
 
 	mem.copy(dst, &obj, size_of(obj))
 

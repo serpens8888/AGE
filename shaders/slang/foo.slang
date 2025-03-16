@@ -2,6 +2,7 @@ struct UBO{
 	float4x4 model;
 	float4x4 view;
 	float4x4 proj;
+	float time;
 };
 
 layout(set = 0, binding = 0) uniform Texture2D []textures;
@@ -40,17 +41,17 @@ v_out vertexMain(v_in input, uniform UBO* ubo){
 
 
 [shader("fragment")]
-float4 fragmentMain(in v_out input) : SV_Target {
+float4 fragmentMain(in v_out input, uniform UBO* ubo) : SV_Target {
 	float2 uv = input.uv;
 	float4 pos = input.pos;
 
-	//float r = abs(sin(time))/2*uv.x;
-	//float g = abs(cos(time))/2*uv.y;
-	//float b = abs(tan(time))/2*pos.z;
+	float r = sin(ubo.time)/2 + 0.5;
+	float g = cos(ubo.time)/2 + 0.5;
+	float b = cos(ubo.time)/2 + 0.5;
 	
-	float4 col = textures[0].Sample(samplers[0], uv);
+	float4 col = textures[1].Sample(samplers[0], uv);
 
-	return col;
+	return float4(col.r * r, col.g * g, col.b * b, col.a * 1);
 	
 
 

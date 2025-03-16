@@ -91,8 +91,11 @@ main :: proc() {
 
 	texture := vulk.create_texture(&ctx, allocator, "assets/images/electronics.png", 1)
 	defer vulk.destroy_texture(ctx.device, allocator, &texture)
+
+	texture2 := vulk.create_texture(&ctx, allocator, "assets/images/200px-Debugempty.png", 1)
+	defer vulk.destroy_texture(ctx.device, allocator, &texture2)
 	
-	textures := []^vulk.Texture{&texture}
+	textures := []^vulk.Texture{&texture, &texture2}
 	samplers := []^vulk.Sampler{&base_sampler}
 	arr := vulk.create_texture_array(&ctx, allocator, {.FRAGMENT, .VERTEX}, textures, samplers)
 	defer vma.destroy_buffer(allocator, arr.buffer.handle, arr.buffer.memory)
