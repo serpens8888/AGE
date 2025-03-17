@@ -159,8 +159,33 @@ create_shader_object :: proc(
 
 }
 
-
 //specialize_shader_object(device: vk.Device, base: vk.ShaderEXT, specialization: ^vk.SpecializationInfo) -> vk.ShaderEXT
+
+create_image_view :: proc(
+    device: vk.Device,
+    image: vk.Image,
+    format: vk.Format,
+    view_type: vk.ImageViewType = .D2,
+    components: vk.ComponentMapping = {.IDENTITY, .IDENTITY, .IDENTITY, .IDENTITY},
+    subresource_range: vk.ImageSubresourceRange = {{.COLOR}, 0, 1, 0, 1}
+) -> (view: vk.ImageView){
+    
+    create_info: vk.ImageViewCreateInfo = {
+        sType = .IMAGE_VIEW_CREATE_INFO,
+        image = image,
+        viewType = view_type,
+        format = format,
+        components = components,
+        subresourceRange = subresource_range,
+    }
+
+    check_vk(vk.CreateImageView(device, &create_info, nil, &view))
+
+    return
+}
+
+
+
 
 
 

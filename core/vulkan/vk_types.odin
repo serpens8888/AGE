@@ -64,19 +64,15 @@ Allocated_Image :: struct{ //images need to be put into descriptor buffers befor
 }
 
 /*
- * Swapchain: 
- *
- *
- *
+ * Swapchain: the vulkan structure responsible for image presentation
 */
 
 Swapchain :: struct{
-    handle: vk.SwapchainKHR,
-    images: []vk.Image,
-    image_views: []vk.ImageView,
-    format: vk.Format,
-    extent: vk.Extent2D,
+    handle: vk.SwapchainKHR, //handle to swapchain
+    images: []vk.Image, //the swapchains images
+    views: []vk.ImageView, //images views of the swapchains images
+    format: vk.Format, //the formap of the swapchain images
+    extent: vk.Extent2D, //the extent of the swapchain images
 }
-
 
 
