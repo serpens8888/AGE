@@ -5,6 +5,7 @@ import "vma"
 import "core:slice"
 import "core:os"
 import "core:fmt"
+import "core:mem"
 
 
 @(require_results)
@@ -100,6 +101,35 @@ create_storage_buffer :: proc(device: vk.Device, allocator: vma.Allocator, size:
     return buffer
 }
 
+@(require_results)
+create_staging_buffer :: #force_inline proc(allocator: vma.Allocator, size: vk.DeviceSize) -> Allocated_Buffer{
+    info := make_buffer_create_info(size, {}) 
+    return allocate_buffer(allocator, &info, {.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT})
+}
+
+@(require_results)
+create_vertex_buffer :: proc(device: vk.Device, allocator: vma.Allocator, verts: []Vertex) -> (buffer: Allocated_Buffer){
+    size:= len(verts) * size_of(Vertex)
+    staging_buffer := create_staging_buffer(allocator, vk.DeviceSize(size))
+
+	data: rawptr
+	vma.map_memory(allocator, staging_buffer.allocation, &data)
+	mem.copy(data, raw_data(verts), int(size))
+	vma.unmap_memory(allocator, staging_buffer.allocation)
+
+    buffer_info := make_buffer_create_info(vk.DeviceSize(size), {})
+    buffer = allocate_buffer(allocator, &buffer_info, {.VERTEX_BUFFER, .TRANSFER_DST, .SHADER_DEVICE_ADDRESS}, {.HOST_VISIBLE, .HOST_COHERENT})
+
+
+    //TODO: finish this fn and do the index buffer one too
+
+    return 
+}
+
+@(require_results)
+create_index_buffer :: proc(device: vk.Device, allocator: vma.Allocator, indices: []u32) -> (buffer: Allocated_Buffer){
+   return 
+}
 
 
 @(require_results)

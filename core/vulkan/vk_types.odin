@@ -5,6 +5,69 @@ import vma "vma"
 
 
 
+
+/*
+ * Vertex: a point in 3d space
+*/
+
+Vertex ::  struct{ 
+    pos: [3]f32,
+    col: [3]f32,
+    normal: [3]f32,
+    texcoord: [2]f32,
+}
+
+get_binding_desc :: proc() -> vk.VertexInputBindingDescription2EXT{
+    return{
+        sType = .VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT,
+        binding = 0,
+        stride = size_of(Vertex),
+        inputRate = .VERTEX,
+        divisor = 1,
+    }
+}
+
+get_pos_attr_desc :: proc() -> vk.VertexInputAttributeDescription2EXT{
+    return {
+        sType = .VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+        binding = 0,
+        location = 0,
+        format = .R32G32B32_SFLOAT,
+        offset = u32(offset_of(Vertex, pos))
+    }
+}
+
+get_col_attr_desc :: proc() -> vk.VertexInputAttributeDescription2EXT{
+    return {
+        sType = .VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+        binding = 0,
+        location = 1,
+        format = .R32G32B32_SFLOAT,
+        offset = u32(offset_of(Vertex, col))
+    }
+}
+
+get_normal_attr_desc :: proc() -> vk.VertexInputAttributeDescription2EXT{
+    return {
+        sType = .VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+        binding = 0,
+        location = 2,
+        format = .R32G32B32_SFLOAT,
+        offset = u32(offset_of(Vertex, normal))
+    }
+}
+
+get_texcoord_attr_desc :: proc() -> vk.VertexInputAttributeDescription2EXT{
+    return {
+        sType = .VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+        binding = 0,
+        location = 3,
+        format = .R32G32_SFLOAT,
+        offset = u32(offset_of(Vertex, texcoord))
+    }
+}
+
+
 /*
  * GPU_Queue: Represents a Vulkan queue with its family, index, and capabilities
  *

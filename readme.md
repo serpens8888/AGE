@@ -4,6 +4,7 @@
 - agricultural engine
 - silver engine
 
+temporarily abandoned so I can learn how to build robust software without dealing with vulkan at the same time
 
 requres odin compiler and slang compiler
 
@@ -12,4 +13,7 @@ dependencies = {
     [sdl3](https://github.com/libsdl-org/SDL),
     [odin-vma](https://github.com/Capati/odin-vma),
 }
+
+I dont have a build script for the dependencies yet.
+
 

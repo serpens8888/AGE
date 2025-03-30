@@ -103,7 +103,7 @@ change_freq :: proc(osc: ^Oscillator, new_freq: f32){
 }
 
 
-@require_results)
+@(require_results)
 check_sdl_handle :: proc(res: ^$T, loc := #caller_location) -> Error{
     if(res == nil){
         fmt.eprintln(sdl.GetError(), loc)

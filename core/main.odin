@@ -20,32 +20,20 @@ main :: proc(){
     assert(sdl.Init({.VIDEO, .AUDIO}))
     defer sdl.Quit()
 
-    mod, err := vulk.create_graphics_module(&ctx, "foo", 300, 300, {})
+    mod, gfx_err := vulk.create_graphics_module(&ctx, "foo", 300, 300, {})
     defer vulk.destroy_graphics_module(&ctx, &mod)
 
 
-
-    device, stream, err2 := aud.initialize_audio(2, 48000)
-    assert(err2 == nil)
-
-
-
-
-    //osc := aud.tri_oscillator(100, 48000)
-
-
-
+    device, stream, aud_err := aud.initialize_audio(2, 48000)
+    assert(aud_err == nil)
+    osc := aud.square_oscillator(10, 48000)
     chunk := new([48000*10]f32)
-
     for i in 0..<48000*5{
-        data := (rand.float32_normal(-0.8, 0.1)) * 0.1
-        chunk[i*2] = data
-        chunk[i*2+1] = data
+        data := ((rand.float32_normal(-0.8, 0.1)) * 0.2) + aud.next(&osc) * 0.1
+        chunk[i*2] = data/2
+        chunk[i*2+1] = data/2
     }
-
     sdl.PutAudioStreamData(stream, chunk, 48000*10*4)
-
-    //fmt.println(chunk)
 
 
 
