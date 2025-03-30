@@ -246,7 +246,7 @@ create_context_allocator :: proc(ctx: ^Context){
 }
 
 create_graphics_module :: proc(ctx: ^Context, window_name: cstring, w,h: i32, flags: sdl.WindowFlags) -> (mod: Graphics_Module, err: mem.Allocator_Error){
-    mod.window =  create_window("foo", 100, 100, {.RESIZABLE})
+    mod.window =  create_window("foo", w, h, {.RESIZABLE})
     mod.surface = create_surface(mod.window, ctx.instance)
     mod.swapchain = create_swapchain(ctx.device, ctx.gpu, mod.surface, mod.window) or_return
 

@@ -34,7 +34,7 @@ main :: proc(){
 
 	vulk.load_vulkan()
 
-    ctx: vulk.Context(vulk.No_Context_Extension)
+    ctx: vulk.Context
     assert(vulk.init_context(&ctx, {}) == nil)
     defer vulk.destroy_context(&ctx)
 

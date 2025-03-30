@@ -1,6 +1,7 @@
 package vulk
 
 import vk "vendor:vulkan"
+import sdl "vendor:sdl3"
 import "core:fmt"
 import "core:reflect"
 import "core:strings"

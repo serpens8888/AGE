@@ -31,7 +31,7 @@ void reduce(uint3 id : SV_DispatchThreadID, uint3 gid : SV_GroupID, uint3 gtid :
         if(gtid.x < offset){
             shared_memory[gtid.x] += shared_memory[gtid.x+offset];
         }
-        //GroupMemoryBarrierWithGroupSync();
+        GroupMemoryBarrierWithGroupSync();
     }
     
     out.buf[gid.x] = shared_memory[0];
