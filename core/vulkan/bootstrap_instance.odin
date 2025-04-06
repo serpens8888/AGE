@@ -8,9 +8,9 @@ import "core:reflect"
 import "base:runtime"
 
 @(require_results)
-create_instance :: proc() -> (instance: vk.Instance, alloc_err: mem.Allocator_Error){
+create_instance :: proc() -> (instance: vk.Instance, err: Error){
 	version: u32
-	check_vk(vk.EnumerateInstanceVersion(&version))
+	check_vk(vk.EnumerateInstanceVersion(&version)) or_return
 	major := (version >> 22) & 0x7F
 	minor := (version >> 12) & 0x3FF
 	patch := version & 0xFFF
@@ -58,7 +58,7 @@ create_instance :: proc() -> (instance: vk.Instance, alloc_err: mem.Allocator_Er
 		create_info.pNext = &debug_info
 	}
 
-	check_vk(vk.CreateInstance(&create_info, nil, &instance))
+	check_vk(vk.CreateInstance(&create_info, nil, &instance)) or_return
 
 
 	return
@@ -66,17 +66,17 @@ create_instance :: proc() -> (instance: vk.Instance, alloc_err: mem.Allocator_Er
 }
 
 @(require_results)
-get_layers :: proc() -> (requested_layers: []cstring, alloc_err: mem.Allocator_Error){
+get_layers :: proc() -> (requested_layers: []cstring, err: Error){
 		requested_layers = make([]cstring, 1)
 		requested_layers[0] = "VK_LAYER_KHRONOS_validation"
 
 		layer_count: u32
-		vk.EnumerateInstanceLayerProperties(&layer_count, nil)
+		check_vk(vk.EnumerateInstanceLayerProperties(&layer_count, nil)) or_return
 
 		available_layers := make([]vk.LayerProperties, layer_count) or_return
 		defer delete(available_layers)
 
-		vk.EnumerateInstanceLayerProperties(&layer_count, raw_data(available_layers))
+		check_vk(vk.EnumerateInstanceLayerProperties(&layer_count, raw_data(available_layers))) or_return
 
 		layer_map := make(map[cstring]bool)
 		defer delete(layer_map)
@@ -104,14 +104,14 @@ get_layers :: proc() -> (requested_layers: []cstring, alloc_err: mem.Allocator_E
 
 
 @(require_results)
-validate_instance_extensions :: proc(requested_extensions: [dynamic]cstring) -> (alloc_err: mem.Allocator_Error){
+validate_instance_extensions :: proc(requested_extensions: [dynamic]cstring) -> (err: Error){
 	ext_count: u32
-	vk.EnumerateInstanceExtensionProperties(nil, &ext_count, nil)
+	check_vk(vk.EnumerateInstanceExtensionProperties(nil, &ext_count, nil)) or_return
 
 	available_extensions := make([]vk.ExtensionProperties,ext_count) or_return
 	defer delete(available_extensions)
 
-	vk.EnumerateInstanceExtensionProperties(nil, &ext_count, raw_data(available_extensions));
+	check_vk(vk.EnumerateInstanceExtensionProperties(nil, &ext_count, raw_data(available_extensions))) or_return
 
 	extension_map := make(map[cstring]bool) 
 	defer delete(extension_map)
@@ -139,7 +139,7 @@ validate_instance_extensions :: proc(requested_extensions: [dynamic]cstring) -> 
 
 }
 
-debug_callback :: proc "stdcall" (severity: vk.DebugUtilsMessageSeverityFlagsEXT,
+debug_callback_linux :: proc "stdcall" (severity: vk.DebugUtilsMessageSeverityFlagsEXT,
 	message_type: vk.DebugUtilsMessageTypeFlagsEXT,
 	callback_data: ^vk.DebugUtilsMessengerCallbackDataEXT,
 	user_data: rawptr) -> b32{
@@ -167,26 +167,60 @@ debug_callback :: proc "stdcall" (severity: vk.DebugUtilsMessageSeverityFlagsEXT
 
 
 	return false
+}
+
+debug_callback_windows :: proc "stdcall" (severity: vk.DebugUtilsMessageSeverityFlagsEXT,
+	message_type: vk.DebugUtilsMessageTypeFlagsEXT,
+	callback_data: ^vk.DebugUtilsMessengerCallbackDataEXT,
+	user_data: rawptr) -> b32{
+
+	context = runtime.default_context()
+
+	severity_string:string
+	if .ERROR in severity{ severity_string = "error" }
+	if .WARNING in severity{ severity_string = "warning" }
+	if .VERBOSE in severity{ severity_string = "verbose"; return false} // early returns to stop clutter in the command line
+	if .INFO in severity{ severity_string = "info"; return false } 		// delete if verbose or info is needed
+
+	type_string:string
+	if .GENERAL in message_type{ type_string = "general" }
+	if .VALIDATION in message_type{ type_string = "validation" }
+	if .PERFORMANCE in message_type{ type_string = "performance" }
+	if .DEVICE_ADDRESS_BINDING in message_type{ type_string = "device address binding" }
+	
+	message: string
+	if(callback_data != nil){
+		message = string(cstring(callback_data.pMessage))
+	}
+
+	fmt.eprintf("severity: %s | type: %s | message: %s\n", severity_string, type_string, message)
 
 
+	return false
 }
 
 @(require_results)
 get_debug_messenger_create_info :: proc() -> vk.DebugUtilsMessengerCreateInfoEXT{
-	return {
+    info: vk.DebugUtilsMessengerCreateInfoEXT =  {
 		sType = .DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
 		messageSeverity = { .ERROR, .WARNING, .VERBOSE, .INFO },
 		messageType = {.GENERAL, .VALIDATION, .PERFORMANCE, .DEVICE_ADDRESS_BINDING },
-		pfnUserCallback = debug_callback,
 	}
+    when(ODIN_OS == .Windows){
+        info.pfnUserCallback = debug_callback_windows
+    } else{
+        info.pfnUserCallback = debug_callback_linux
+    }
+
+    return info
 }
 
 @(require_results)
-create_debug_messenger :: proc(instance: vk.Instance) -> (debug_messenger: vk.DebugUtilsMessengerEXT){
+create_debug_messenger :: proc(instance: vk.Instance) -> (debug_messenger: vk.DebugUtilsMessengerEXT, err: Error){
 
 	ci := get_debug_messenger_create_info()
 
-	check_vk(vk.CreateDebugUtilsMessengerEXT(instance, &ci, nil, &debug_messenger))
+	check_vk(vk.CreateDebugUtilsMessengerEXT(instance, &ci, nil, &debug_messenger)) or_return
 
 	return
 }

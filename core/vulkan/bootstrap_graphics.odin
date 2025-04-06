@@ -7,25 +7,23 @@ import "core:fmt"
 import "core:slice"
 import "core:mem"
 
-create_window :: proc(name: cstring, w, h: i32, flags: sdl.WindowFlags) -> (window: ^sdl.Window){
+create_window :: proc(name: cstring, w, h: i32, flags: sdl.WindowFlags) -> (window: ^sdl.Window, err: Error){
 
     flags_vk :=  flags + {.VULKAN}
 
     window = sdl.CreateWindow(name, w, h, flags_vk)
 
     if(!sdl.SetWindowMinimumSize(window, 1, 1)){
-        fmt.eprintln(sdl.GetError())
-        fmt.eprintln("failed to set window minimum size of (1,1)")
+        return nil, .SDL_FAILURE
     }
 
     return 
 
 }
 
-create_surface :: proc(window: ^sdl.Window, instance: vk.Instance) -> (surface: vk.SurfaceKHR){
+create_surface :: proc(window: ^sdl.Window, instance: vk.Instance) -> (surface: vk.SurfaceKHR, err: Error){
     if(!sdl.Vulkan_CreateSurface(window, instance, nil, &surface)){
-        fmt.eprintln(sdl.GetError())
-        panic("failed to create vulkan window surface")
+        return {}, .SDL_FAILURE
     }
     return
 }
@@ -38,7 +36,7 @@ create_swapchain :: proc(
     old_swapchain: vk.SwapchainKHR = 0x0,
     sharing_mode: vk.SharingMode = .EXCLUSIVE,
     sharing_queues: []GPU_Queue = {}, //graphics queue and present queue, if separate... or whatever you want
-) -> (swapchain: Swapchain, err: mem.Allocator_Error){
+) -> (swapchain: Swapchain, err: Error){
 
     format := select_swapchain_format(gpu, surface, {.B8G8R8A8_SRGB, .SRGB_NONLINEAR}) or_return
     present_mode := select_swapchain_present_mode(gpu, surface, .FIFO) or_return
@@ -89,7 +87,7 @@ create_swapchain :: proc(
         }
     }
 
-    check_vk(vk.CreateSwapchainKHR(device, &create_info, nil, &swapchain.handle))
+    check_vk(vk.CreateSwapchainKHR(device, &create_info, nil, &swapchain.handle)) or_return
 
 	vk.GetSwapchainImagesKHR(device, swapchain.handle, &image_count, nil)
 	swapchain.images = make([]vk.Image, image_count) or_return
@@ -98,7 +96,7 @@ create_swapchain :: proc(
     swapchain.views = make([]vk.ImageView, image_count) or_return
 
     for &view, i in swapchain.views{
-        view = create_image_view(device, swapchain.images[i], format.format)
+        view = create_image_view(device, swapchain.images[i], format.format) or_return
     }
 
     swapchain.extent = extent

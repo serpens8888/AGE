@@ -15,7 +15,7 @@ allocate_buffer :: proc(
     usage: vk.BufferUsageFlags2,
     mem_properties: vk.MemoryPropertyFlags,
     alloc_flags: vma.Allocation_Create_Flags = {.Strategy_Min_Memory, .Strategy_Min_Time, .Strategy_Min_Offset},
-) -> (buffer: Allocated_Buffer){
+) -> (buffer: Allocated_Buffer, err: Error){
 
     usage_info: vk.BufferUsageFlags2CreateInfo = {
         sType = .BUFFER_USAGE_FLAGS_2_CREATE_INFO,
@@ -37,7 +37,7 @@ allocate_buffer :: proc(
         &buffer.handle,
         &buffer.allocation,
         &buffer.alloc_info)
-    )
+    ) or_return
 
     return
 }
@@ -55,7 +55,7 @@ allocate_image :: proc(
     image_info: vk.ImageCreateInfo,
     mem_properties: vk.MemoryPropertyFlags,
     alloc_flags: vma.Allocation_Create_Flags = {.Strategy_Min_Memory, .Strategy_Min_Time, .Strategy_Min_Offset},
-) -> (image: Allocated_Image){
+) -> (image: Allocated_Image, err: Error){
 
     allocation_create_info: vma.Allocation_Create_Info = {
         flags = alloc_flags,
@@ -63,17 +63,17 @@ allocate_image :: proc(
         required_flags = mem_properties
     }
 
-    check_vk(vma.create_image(allocator, image_info, allocation_create_info, &image.handle, &image.allocation, &image.alloc_info))
+    check_vk(vma.create_image(allocator, image_info, allocation_create_info, &image.handle, &image.allocation, &image.alloc_info)) or_return
 
     return
 }
 
 @(require_results)
-create_uniform_buffer :: proc(device: vk.Device, allocator: vma.Allocator, size: vk.DeviceSize) -> (buffer: Allocated_Buffer){
+create_uniform_buffer :: proc(device: vk.Device, allocator: vma.Allocator, size: vk.DeviceSize) -> (buffer: Allocated_Buffer, err: Error){
     buffer_info := make_buffer_create_info(size, {})
-    buffer = allocate_buffer(allocator, &buffer_info, {.UNIFORM_BUFFER, .SHADER_DEVICE_ADDRESS}, {.HOST_VISIBLE, .HOST_COHERENT})
+    buffer = allocate_buffer(allocator, &buffer_info, {.UNIFORM_BUFFER, .SHADER_DEVICE_ADDRESS}, {.HOST_VISIBLE, .HOST_COHERENT}) or_return
 
-    check_vk(vma.map_memory(allocator, buffer.allocation, &buffer.mapped_ptr))
+    check_vk(vma.map_memory(allocator, buffer.allocation, &buffer.mapped_ptr)) or_return
 
     address_info: vk.BufferDeviceAddressInfo = {
         sType = .BUFFER_DEVICE_ADDRESS_INFO,
@@ -86,11 +86,11 @@ create_uniform_buffer :: proc(device: vk.Device, allocator: vma.Allocator, size:
 }
 
 @(require_results)
-create_storage_buffer :: proc(device: vk.Device, allocator: vma.Allocator, size: vk.DeviceSize) -> (buffer: Allocated_Buffer){
+create_storage_buffer :: proc(device: vk.Device, allocator: vma.Allocator, size: vk.DeviceSize) -> (buffer: Allocated_Buffer, err: Error){
     buffer_info := make_buffer_create_info(size, {})
-    buffer = allocate_buffer(allocator, &buffer_info, {.STORAGE_BUFFER, .SHADER_DEVICE_ADDRESS}, {.HOST_VISIBLE, .HOST_COHERENT})
+    buffer = allocate_buffer(allocator, &buffer_info, {.STORAGE_BUFFER, .SHADER_DEVICE_ADDRESS}, {.HOST_VISIBLE, .HOST_COHERENT}) or_return
 
-    check_vk(vma.map_memory(allocator, buffer.allocation, &buffer.mapped_ptr))
+    check_vk(vma.map_memory(allocator, buffer.allocation, &buffer.mapped_ptr)) or_return
 
     address_info: vk.BufferDeviceAddressInfo = {
         sType = .BUFFER_DEVICE_ADDRESS_INFO,
@@ -98,19 +98,21 @@ create_storage_buffer :: proc(device: vk.Device, allocator: vma.Allocator, size:
     }
 
     buffer.address = vk.GetBufferDeviceAddress(device, &address_info)
-    return buffer
+    return buffer, nil
 }
 
 @(require_results)
-create_staging_buffer :: #force_inline proc(allocator: vma.Allocator, size: vk.DeviceSize) -> Allocated_Buffer{
+create_staging_buffer :: #force_inline proc(allocator: vma.Allocator, size: vk.DeviceSize) -> (buffer: Allocated_Buffer, err: Error){
     info := make_buffer_create_info(size, {}) 
-    return allocate_buffer(allocator, &info, {.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT})
+    buffer = allocate_buffer(allocator, &info, {.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT}) or_return
+
+    return buffer, nil
 }
 
 @(require_results)
-create_vertex_buffer :: proc(device: vk.Device, allocator: vma.Allocator, verts: []Vertex) -> (buffer: Allocated_Buffer){
+create_vertex_buffer :: proc(device: vk.Device, allocator: vma.Allocator, verts: []Vertex) -> (buffer: Allocated_Buffer, err: Error){
     size:= len(verts) * size_of(Vertex)
-    staging_buffer := create_staging_buffer(allocator, vk.DeviceSize(size))
+    staging_buffer := create_staging_buffer(allocator, vk.DeviceSize(size)) or_return
 
 	data: rawptr
 	vma.map_memory(allocator, staging_buffer.allocation, &data)
@@ -118,7 +120,7 @@ create_vertex_buffer :: proc(device: vk.Device, allocator: vma.Allocator, verts:
 	vma.unmap_memory(allocator, staging_buffer.allocation)
 
     buffer_info := make_buffer_create_info(vk.DeviceSize(size), {})
-    buffer = allocate_buffer(allocator, &buffer_info, {.VERTEX_BUFFER, .TRANSFER_DST, .SHADER_DEVICE_ADDRESS}, {.HOST_VISIBLE, .HOST_COHERENT})
+    buffer = allocate_buffer(allocator, &buffer_info, {.VERTEX_BUFFER, .TRANSFER_DST, .SHADER_DEVICE_ADDRESS}, {.HOST_VISIBLE, .HOST_COHERENT}) or_return
 
 
     //TODO: finish this fn and do the index buffer one too
@@ -133,7 +135,7 @@ create_index_buffer :: proc(device: vk.Device, allocator: vma.Allocator, indices
 
 
 @(require_results)
-create_pipeline_layout :: proc(device: vk.Device, layouts: []vk.DescriptorSetLayout, ranges: []vk.PushConstantRange) -> (layout: vk.PipelineLayout){
+create_pipeline_layout :: proc(device: vk.Device, layouts: []vk.DescriptorSetLayout, ranges: []vk.PushConstantRange) -> (layout: vk.PipelineLayout, err: Error){
     
     create_info: vk.PipelineLayoutCreateInfo = {
         sType = .PIPELINE_LAYOUT_CREATE_INFO,
@@ -143,7 +145,7 @@ create_pipeline_layout :: proc(device: vk.Device, layouts: []vk.DescriptorSetLay
         pPushConstantRanges = raw_data(ranges),
     }
 
-    check_vk(vk.CreatePipelineLayout(device, &create_info, nil, &layout))
+    check_vk(vk.CreatePipelineLayout(device, &create_info, nil, &layout)) or_return
 
     return
 }
@@ -157,9 +159,9 @@ create_shader_object :: proc(
     ranges: []vk.PushConstantRange,
     specialization: ^vk.SpecializationInfo = {},
     flags: vk.ShaderCreateFlagsEXT = {},
-) -> (shader: vk.ShaderEXT){
+) -> (shader: vk.ShaderEXT, err: Error){
 
-    spirv, err := os.read_entire_file_from_filename_or_err(filepath)
+    spirv := os.read_entire_file_from_filename_or_err(filepath) or_return
     defer delete(spirv)
     if(err != nil){
         fmt.eprintln("error reading in spirv file: ", err)
@@ -182,7 +184,7 @@ create_shader_object :: proc(
         pSpecializationInfo = specialization,
     }
 
-    check_vk(vk.CreateShadersEXT(device, 1, &shader_info, nil, &shader))
+    check_vk(vk.CreateShadersEXT(device, 1, &shader_info, nil, &shader)) or_return
 
     return
 
@@ -198,7 +200,7 @@ create_image_view :: proc(
     view_type: vk.ImageViewType = .D2,
     components: vk.ComponentMapping = {.IDENTITY, .IDENTITY, .IDENTITY, .IDENTITY},
     subresource_range: vk.ImageSubresourceRange = {{.COLOR}, 0, 1, 0, 1}
-) -> (view: vk.ImageView){
+) -> (view: vk.ImageView, err: Error){
     
     create_info: vk.ImageViewCreateInfo = {
         sType = .IMAGE_VIEW_CREATE_INFO,
@@ -209,7 +211,7 @@ create_image_view :: proc(
         subresourceRange = subresource_range,
     }
 
-    check_vk(vk.CreateImageView(device, &create_info, nil, &view))
+    check_vk(vk.CreateImageView(device, &create_info, nil, &view)) or_return
 
     return
 }

@@ -90,8 +90,8 @@ get_separate_sparse_binding_queue :: proc(queues: ^[]GPU_Queue) -> (compute_queu
 }
 
 @(require_results)
-query_presentation_support :: proc(queue: GPU_Queue, gpu: vk.PhysicalDevice, surface: vk.SurfaceKHR) -> (present_support: b32){
-    check_vk(vk.GetPhysicalDeviceSurfaceSupportKHR(gpu, u32(queue.family), surface, &present_support))
+query_presentation_support :: proc(queue: GPU_Queue, gpu: vk.PhysicalDevice, surface: vk.SurfaceKHR) -> (present_support: b32, err: Error){
+    check_vk(vk.GetPhysicalDeviceSurfaceSupportKHR(gpu, u32(queue.family), surface, &present_support)) or_return
     return
 }
 
@@ -101,14 +101,14 @@ get_queue :: proc(device: vk.Device, gpu_queue: GPU_Queue) -> (queue: vk.Queue){
     return
 }
 
-create_command_pool :: proc(device: vk.Device, gpu_queue: GPU_Queue) -> (pool: vk.CommandPool){
+create_command_pool :: proc(device: vk.Device, gpu_queue: GPU_Queue) -> (pool: vk.CommandPool, err: Error){
     create_info: vk.CommandPoolCreateInfo = {
         sType = .COMMAND_POOL_CREATE_INFO,
         flags = {.RESET_COMMAND_BUFFER},
         queueFamilyIndex = gpu_queue.family,
     }
 
-    check_vk(vk.CreateCommandPool(device, &create_info, nil, &pool))
+    check_vk(vk.CreateCommandPool(device, &create_info, nil, &pool)) or_return
 
     return
 }

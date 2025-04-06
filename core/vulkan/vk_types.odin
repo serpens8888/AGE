@@ -2,7 +2,22 @@ package vulk
 
 import vk "vendor:vulkan"
 import vma "vma"
+import "base:runtime"
+import "core:os"
 
+
+
+
+Error :: union #shared_nil{
+    vk.Result,
+    runtime.Allocator_Error,
+    os.Error,
+    Vulk_Error,
+}
+
+Vulk_Error :: enum{
+    SDL_FAILURE
+}
 
 
 

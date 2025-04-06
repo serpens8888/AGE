@@ -111,7 +111,7 @@ validate_device_extensions :: proc(gpu: vk.PhysicalDevice, required_extensions: 
 	return true, nil
 }
 
-create_logical_device :: proc(gpu: vk.PhysicalDevice, queues: []GPU_Queue, required_extensions: []cstring, device_features: ^vk.PhysicalDeviceFeatures2) -> (device: vk.Device, alloc_err: mem.Allocator_Error){
+create_logical_device :: proc(gpu: vk.PhysicalDevice, queues: []GPU_Queue, required_extensions: []cstring, device_features: ^vk.PhysicalDeviceFeatures2) -> (device: vk.Device, err: Error){
 
     //*get the queue create infos
 
@@ -149,7 +149,7 @@ create_logical_device :: proc(gpu: vk.PhysicalDevice, queues: []GPU_Queue, requi
 		enabledExtensionCount = u32(len(required_extensions)),
     }
 
-    check_vk(vk.CreateDevice(gpu, &device_create_info, nil, &device))
+    check_vk(vk.CreateDevice(gpu, &device_create_info, nil, &device)) or_return
 
     return
 }

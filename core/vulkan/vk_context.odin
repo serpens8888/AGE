@@ -18,15 +18,11 @@ Context :: struct{
     device: vk.Device, //the vulkan logical device
 
     general_queue: vk.Queue,
-    general_pool: vk.CommandPool,
 
     //these queues can be enabled via context flags
     compute_queue: vk.Queue,
-    compute_pool: vk.CommandPool,
     transfer_queue: vk.Queue,
-    transfer_pool: vk.CommandPool,
     sparse_queue: vk.Queue,
-    sparse_pool: vk.CommandPool,
 
 
 }
@@ -62,7 +58,7 @@ device_extensions: []cstring : {
 
 //ORDER IS VERY IMPORTANT
 @(require_results)
-init_context :: proc(ctx: ^Context, flags: Context_Flags) -> (alloc_err: mem.Allocator_Error){
+init_context :: proc(ctx: ^Context, flags: Context_Flags) -> (err: Error){
     ctx.instance = create_instance() or_return
 
 	vk.load_proc_addresses(ctx.instance)
@@ -95,10 +91,6 @@ init_context :: proc(ctx: ^Context, flags: Context_Flags) -> (alloc_err: mem.All
 
 //ORDER IS VERY IMPORTANT
 destroy_context :: proc(ctx: ^Context){
-    vk.DestroyCommandPool(ctx.device, ctx.general_pool, nil)
-    if(ctx.compute_pool != 0){ vk.DestroyCommandPool(ctx.device, ctx.compute_pool, nil) }
-    if(ctx.transfer_pool != 0){ vk.DestroyCommandPool(ctx.device, ctx.transfer_pool, nil) }
-    if(ctx.sparse_pool != 0){ vk.DestroyCommandPool(ctx.device, ctx.sparse_pool, nil) }
 
 	vma.destroy_allocator(ctx.allocator)
     vk.DestroyDevice(ctx.device, nil)
@@ -145,24 +137,20 @@ select_context_queues :: proc(selected_queues: ^[dynamic]GPU_Queue, gpu_queues: 
 create_context_queues :: proc(ctx: ^Context, selected_queues: [dynamic]GPU_Queue, flags: Context_Flags){
     queue_iter := 0
 
-    ctx.general_pool = create_command_pool(ctx.device, selected_queues[queue_iter])
     ctx.general_queue = get_queue(ctx.device, selected_queues[queue_iter])
         queue_iter+=1
 
     if .SEPARATE_COMPUTE in flags {
-        ctx.compute_pool = create_command_pool(ctx.device, selected_queues[queue_iter])
         ctx.compute_queue = get_queue(ctx.device, selected_queues[queue_iter])
         queue_iter+=1
     }
 
     if .SEPARATE_TRANSFER in flags {
-        ctx.transfer_pool = create_command_pool(ctx.device, selected_queues[queue_iter])
         ctx.transfer_queue = get_queue(ctx.device, selected_queues[queue_iter])
         queue_iter+=1
     }
 
     if .SEPARATE_SPARSE in flags {
-        ctx.sparse_pool = create_command_pool(ctx.device, selected_queues[queue_iter])
         ctx.sparse_queue = get_queue(ctx.device, selected_queues[queue_iter])
         queue_iter+=1
     }
@@ -170,7 +158,7 @@ create_context_queues :: proc(ctx: ^Context, selected_queues: [dynamic]GPU_Queue
 }
 
 @(private="file")
-create_context_device :: proc(ctx: ^Context, selected_queues: []GPU_Queue) -> (err: mem.Allocator_Error){
+create_context_device :: proc(ctx: ^Context, selected_queues: []GPU_Queue) -> (err: Error){
 	features: vk.PhysicalDeviceFeatures2 = {
 		sType = .PHYSICAL_DEVICE_FEATURES_2,
 		features = {
@@ -228,7 +216,7 @@ create_context_device :: proc(ctx: ^Context, selected_queues: []GPU_Queue) -> (e
 }
 
 @(private="file")
-create_context_allocator :: proc(ctx: ^Context){
+create_context_allocator :: proc(ctx: ^Context) -> Error{
     vma_vk_functions := vma.create_vulkan_functions()
 
     allocator_create_info: vma.Allocator_Create_Info = {
@@ -241,13 +229,15 @@ create_context_allocator :: proc(ctx: ^Context){
     }
 
 
-    check_vk(vma.create_allocator(allocator_create_info, &ctx.allocator))
+    check_vk(vma.create_allocator(allocator_create_info, &ctx.allocator)) or_return
+
+    return nil
 
 }
 
-create_graphics_module :: proc(ctx: ^Context, window_name: cstring, w,h: i32, flags: sdl.WindowFlags) -> (mod: Graphics_Module, err: mem.Allocator_Error){
-    mod.window =  create_window("foo", w, h, {.RESIZABLE})
-    mod.surface = create_surface(mod.window, ctx.instance)
+create_graphics_module :: proc(ctx: ^Context, window_name: cstring, w,h: i32, flags: sdl.WindowFlags) -> (mod: Graphics_Module, err: Error){
+    mod.window =  create_window("foo", w, h, {.RESIZABLE}) or_return
+    mod.surface = create_surface(mod.window, ctx.instance) or_return
     mod.swapchain = create_swapchain(ctx.device, ctx.gpu, mod.surface, mod.window) or_return
 
     return

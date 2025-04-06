@@ -9,12 +9,12 @@ import "core:os"
 import "core:mem"
 import "core:c/libc"
 
-check_vk :: proc(res: vk.Result, loc := #caller_location){
+@(require_results)
+check_vk :: proc(res: vk.Result) -> Error{
 	if(res != .SUCCESS){
-		sb: strings.Builder //no need to deallocate anything, we're about to crash!
-		msg := fmt.sbprintf(&sb, "vulkan result was not .SUCCESS, result = %s", reflect.enum_string(res))
-		panic(msg, loc)
+        return res
 	}
+    return nil
 }
 
 
