@@ -28,7 +28,7 @@ enumerate_queues :: proc(gpu: vk.PhysicalDevice) -> (queues: []GPU_Queue, alloc_
 	queue_iter: uint = 0
 	for family, i in queue_families{
 		for j in 0..<family.queueCount{
-			queues[queue_iter] = {u32(i), u32(j), family.queueFlags}
+			queues[queue_iter] = {u32(i), u32(j), family.queueFlags, nil}
 			queue_iter += 1
 		}
 	

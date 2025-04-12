@@ -17,12 +17,12 @@ Context :: struct{
     gpu_queues: []GPU_Queue, //enumerated queues of the gpu
     device: vk.Device, //the vulkan logical device
 
-    general_queue: vk.Queue,
+    general_queue: GPU_Queue,
 
     //these queues can be enabled via context flags
-    compute_queue: vk.Queue,
-    transfer_queue: vk.Queue,
-    sparse_queue: vk.Queue,
+    compute_queue: GPU_Queue,
+    transfer_queue: GPU_Queue,
+    sparse_queue: GPU_Queue,
 
 
 }
@@ -50,7 +50,6 @@ device_extensions: []cstring : {
     "VK_KHR_maintenance5",
 
     "VK_EXT_shader_object",
-    "VK_EXT_descriptor_buffer", //THIS ONE CRASHES RENDERDOC
     "VK_EXT_descriptor_indexing",
 
     "VK_AMD_device_coherent_memory",
@@ -63,7 +62,9 @@ init_context :: proc(ctx: ^Context, flags: Context_Flags) -> (err: Error){
 
 	vk.load_proc_addresses(ctx.instance)
 
-	when ODIN_DEBUG {ctx.debug_messenger = create_debug_messenger(ctx.instance)}
+	when ODIN_DEBUG {
+        ctx.debug_messenger = create_debug_messenger(ctx.instance) or_return
+    }
 
 	
     ctx.gpu = choose_gpu(ctx.instance, device_extensions) or_return
@@ -137,21 +138,41 @@ select_context_queues :: proc(selected_queues: ^[dynamic]GPU_Queue, gpu_queues: 
 create_context_queues :: proc(ctx: ^Context, selected_queues: [dynamic]GPU_Queue, flags: Context_Flags){
     queue_iter := 0
 
-    ctx.general_queue = get_queue(ctx.device, selected_queues[queue_iter])
-        queue_iter+=1
+    ctx.general_queue = {
+        family = selected_queues[queue_iter].family,
+        index = selected_queues[queue_iter].index,
+        flags = selected_queues[queue_iter].flags,
+        handle = get_queue(ctx.device, selected_queues[queue_iter])
+    }
+    queue_iter+=1
 
     if .SEPARATE_COMPUTE in flags {
-        ctx.compute_queue = get_queue(ctx.device, selected_queues[queue_iter])
+        ctx.compute_queue = {
+            family = selected_queues[queue_iter].family,
+            index = selected_queues[queue_iter].index,
+            flags = selected_queues[queue_iter].flags,
+            handle = get_queue(ctx.device, selected_queues[queue_iter])
+        }        
         queue_iter+=1
     }
 
     if .SEPARATE_TRANSFER in flags {
-        ctx.transfer_queue = get_queue(ctx.device, selected_queues[queue_iter])
+        ctx.transfer_queue = {
+            family = selected_queues[queue_iter].family,
+            index = selected_queues[queue_iter].index,
+            flags = selected_queues[queue_iter].flags,
+            handle = get_queue(ctx.device, selected_queues[queue_iter])
+        }
         queue_iter+=1
     }
 
     if .SEPARATE_SPARSE in flags {
-        ctx.sparse_queue = get_queue(ctx.device, selected_queues[queue_iter])
+        ctx.sparse_queue = {
+            family = selected_queues[queue_iter].family,
+            index = selected_queues[queue_iter].index,
+            flags = selected_queues[queue_iter].flags,
+            handle = get_queue(ctx.device, selected_queues[queue_iter])
+        }
         queue_iter+=1
     }
 
@@ -168,6 +189,7 @@ create_context_device :: proc(ctx: ^Context, selected_queues: []GPU_Queue) -> (e
 
 	vulkan_features11: vk.PhysicalDeviceVulkan11Features = {
 		sType = .PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+        
 	};
 
 	vulkan_features12: vk.PhysicalDeviceVulkan12Features = {
@@ -204,8 +226,7 @@ create_context_device :: proc(ctx: ^Context, selected_queues: []GPU_Queue) -> (e
 	vulkan_features11.pNext = &vulkan_features12
 	vulkan_features12.pNext = &vulkan_features13
 	vulkan_features13.pNext = &shader_obj
-	shader_obj.pNext = &desc_buf
-	desc_buf.pNext = &coherent_memory
+	shader_obj.pNext = &coherent_memory
     coherent_memory.pNext = &maintenance5
 
 

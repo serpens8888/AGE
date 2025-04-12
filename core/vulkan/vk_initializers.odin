@@ -69,6 +69,18 @@ make_submit_info :: proc(
     }
 }
 
+make_present_info :: proc(swapchains: []vk.SwapchainKHR, wait_semaphores: []vk.Semaphore, image_indices: []u32, results: []vk.Result) -> vk.PresentInfoKHR{
+    return {
+        sType = .PRESENT_INFO_KHR,
+        waitSemaphoreCount = u32(len(wait_semaphores)),
+        pWaitSemaphores = raw_data(wait_semaphores),
+        swapchainCount = u32(len(swapchains)),
+        pSwapchains = raw_data(swapchains),
+        pImageIndices = raw_data(image_indices),
+        pResults = raw_data(results)
+    }
+}
+
 @(require_results)
 make_image_create_info :: proc(format: vk.Format, usage: vk.ImageUsageFlags, extent: vk.Extent3D) -> vk.ImageCreateInfo{
     return{

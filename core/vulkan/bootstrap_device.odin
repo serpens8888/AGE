@@ -104,6 +104,7 @@ validate_device_extensions :: proc(gpu: vk.PhysicalDevice, required_extensions: 
 
 	for ext in required_extensions{
 		if(ext_map[ext] != true){
+            fmt.println(ext, "NOT FOUND")
 			return false, nil
 		}
 	}

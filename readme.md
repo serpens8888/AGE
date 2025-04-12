@@ -4,7 +4,8 @@
 - agricultural engine
 - silver engine
 
-temporarily abandoned so I can learn how to build robust software without dealing with vulkan at the same time
+temporarily abandoned so I can learn how to build robust software without dealing with vulkan/gpu at the same time
+
 
 requres odin compiler and slang compiler
 
