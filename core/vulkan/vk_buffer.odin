@@ -149,7 +149,7 @@ create_vertex_buffer :: proc(
 	vma.unmap_memory(allocator, staging_buffer.allocation)
 
     buffer_info := make_buffer_create_info(vk.DeviceSize(size), {})
-    vertex_buffer = allocate_buffer(allocator, &buffer_info, {.VERTEX_BUFFER, .TRANSFER_DST, .SHADER_DEVICE_ADDRESS}, {.HOST_VISIBLE, .HOST_COHERENT}) or_return
+    vertex_buffer = allocate_buffer(allocator, &buffer_info, {.VERTEX_BUFFER, .TRANSFER_DST}, {.HOST_VISIBLE, .HOST_COHERENT}) or_return
 
     copy_buffer(device, transfer_queue, transfer_pool, staging_buffer, vertex_buffer, vk.DeviceSize(size)) or_return
 
@@ -176,7 +176,7 @@ create_index_buffer :: proc(
 	vma.unmap_memory(allocator, staging_buffer.allocation)
 
     buffer_info := make_buffer_create_info(vk.DeviceSize(size), {})
-    index_buffer = allocate_buffer(allocator, &buffer_info, {.INDEX_BUFFER, .TRANSFER_DST, .SHADER_DEVICE_ADDRESS}, {.HOST_VISIBLE, .HOST_COHERENT}) or_return
+    index_buffer = allocate_buffer(allocator, &buffer_info, {.INDEX_BUFFER, .TRANSFER_DST}, {.HOST_VISIBLE, .HOST_COHERENT}) or_return
 
     copy_buffer(device, transfer_queue, transfer_pool, staging_buffer, index_buffer, vk.DeviceSize(size)) or_return
 

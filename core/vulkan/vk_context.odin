@@ -14,15 +14,8 @@ Context :: struct{
     instance: vk.Instance, //the vulkan instance
     debug_messenger: vk.DebugUtilsMessengerEXT, //the debug messenger for validation layers
     gpu: vk.PhysicalDevice, //the handle to the auto selected gpu
-    gpu_queues: []GPU_Queue, //enumerated queues of the gpu
     device: vk.Device, //the vulkan logical device
-
-    general_queue: GPU_Queue,
-
-    //these queues can be enabled via context flags
-    compute_queue: GPU_Queue,
-    transfer_queue: GPU_Queue,
-    sparse_queue: GPU_Queue,
+    queue: GPU_Queue, //the general purpose gpu_queue
 
 
 }
@@ -33,14 +26,6 @@ Graphics_Module :: struct{
     swapchain: Swapchain,
 }
 
-Context_Flag :: enum{
-    //GRAPHICS,
-    SEPARATE_COMPUTE,
-    SEPARATE_TRANSFER,
-    SEPARATE_SPARSE,
-}
-
-Context_Flags :: bit_set[Context_Flag]
 
 device_extensions: []cstring : {
     "VK_KHR_swapchain",
@@ -49,15 +34,13 @@ device_extensions: []cstring : {
     "VK_KHR_synchronization2",
     "VK_KHR_maintenance5",
 
-    "VK_EXT_shader_object",
     "VK_EXT_descriptor_indexing",
 
-    "VK_AMD_device_coherent_memory",
 }
 
 //ORDER IS VERY IMPORTANT
 @(require_results)
-init_context :: proc(ctx: ^Context, flags: Context_Flags) -> (err: Error){
+init_context :: proc(ctx: ^Context) -> (err: Error){
     ctx.instance = create_instance() or_return
 
 	vk.load_proc_addresses(ctx.instance)
@@ -69,21 +52,17 @@ init_context :: proc(ctx: ^Context, flags: Context_Flags) -> (err: Error){
 	
     ctx.gpu = choose_gpu(ctx.instance, device_extensions) or_return
 
-	ctx.gpu_queues = enumerate_queues(ctx.gpu) or_return
+	gpu_queues := enumerate_queues(ctx.gpu) or_return
 
-    selected_queues := make([dynamic]GPU_Queue) or_return
-    defer delete(selected_queues)
+    select_context_queue(&gpu_queues)
 
-    select_context_queues(&selected_queues, &ctx.gpu_queues, flags)
+    create_context_device(ctx) or_return
 
-
-    create_context_device(ctx, selected_queues[:]) or_return
+    create_context_queue(ctx, ctx.queue)
 
 
 	vk.load_proc_addresses(ctx.device)
 
-
-    create_context_queues(ctx, selected_queues, flags)
 
     create_context_allocator(ctx)
 
@@ -99,87 +78,29 @@ destroy_context :: proc(ctx: ^Context){
 	when ODIN_DEBUG {vk.DestroyDebugUtilsMessengerEXT(ctx.instance, ctx.debug_messenger, nil)}
 	vk.DestroyInstance(ctx.instance, nil)
 
-    delete(ctx.gpu_queues)
 }
 
 @(private="file")
-select_context_queues :: proc(selected_queues: ^[dynamic]GPU_Queue, gpu_queues: ^[]GPU_Queue, flags: Context_Flags){
-    general_purpose_queue, general_queue_found := get_general_purpose_queue(gpu_queues) 
-    assert(general_queue_found == true)
-
-    append(selected_queues, general_purpose_queue)
+select_context_queue :: proc(gpu_queues: ^[]GPU_Queue){
+    queue, queue_found := get_general_purpose_queue(gpu_queues) 
+    assert(queue_found == true)
 
 
-    compute_queue, transfer_queue, sparse_queue: GPU_Queue
-
-    if .SEPARATE_COMPUTE in flags{
-        compute_queue_found: bool = false
-        compute_queue, compute_queue_found = get_separate_compute_queue(gpu_queues)
-        assert(compute_queue_found == true)
-        append(selected_queues, compute_queue)
-    }
-    
-    if .SEPARATE_TRANSFER in flags{
-        transfer_queue_found: bool = false
-        transfer_queue, transfer_queue_found = get_separate_transfer_queue(gpu_queues)
-        assert(transfer_queue_found == true)
-        append(selected_queues, transfer_queue)
-    }
-
-    if .SEPARATE_SPARSE in flags{
-        sparse_queue_found: bool = false
-        sparse_queue, sparse_queue_found = get_separate_sparse_binding_queue(gpu_queues)
-        assert(sparse_queue_found == true)
-        append(selected_queues, sparse_queue)
-    }
 }
 
-@(private="file")
-create_context_queues :: proc(ctx: ^Context, selected_queues: [dynamic]GPU_Queue, flags: Context_Flags){
-    queue_iter := 0
+create_context_queue :: proc(ctx: ^Context, selected_queue: GPU_Queue){
 
-    ctx.general_queue = {
-        family = selected_queues[queue_iter].family,
-        index = selected_queues[queue_iter].index,
-        flags = selected_queues[queue_iter].flags,
-        handle = get_queue(ctx.device, selected_queues[queue_iter])
-    }
-    queue_iter+=1
-
-    if .SEPARATE_COMPUTE in flags {
-        ctx.compute_queue = {
-            family = selected_queues[queue_iter].family,
-            index = selected_queues[queue_iter].index,
-            flags = selected_queues[queue_iter].flags,
-            handle = get_queue(ctx.device, selected_queues[queue_iter])
-        }        
-        queue_iter+=1
-    }
-
-    if .SEPARATE_TRANSFER in flags {
-        ctx.transfer_queue = {
-            family = selected_queues[queue_iter].family,
-            index = selected_queues[queue_iter].index,
-            flags = selected_queues[queue_iter].flags,
-            handle = get_queue(ctx.device, selected_queues[queue_iter])
-        }
-        queue_iter+=1
-    }
-
-    if .SEPARATE_SPARSE in flags {
-        ctx.sparse_queue = {
-            family = selected_queues[queue_iter].family,
-            index = selected_queues[queue_iter].index,
-            flags = selected_queues[queue_iter].flags,
-            handle = get_queue(ctx.device, selected_queues[queue_iter])
-        }
-        queue_iter+=1
+    ctx.queue = {
+        family = selected_queue.family,
+        index = selected_queue.index,
+        flags = selected_queue.flags,
+        handle = get_queue(ctx.device, selected_queue)
     }
 
 }
 
 @(private="file")
-create_context_device :: proc(ctx: ^Context, selected_queues: []GPU_Queue) -> (err: Error){
+create_context_device :: proc(ctx: ^Context) -> (err: Error){
 	features: vk.PhysicalDeviceFeatures2 = {
 		sType = .PHYSICAL_DEVICE_FEATURES_2,
 		features = {
@@ -205,18 +126,6 @@ create_context_device :: proc(ctx: ^Context, selected_queues: []GPU_Queue) -> (e
         synchronization2 = true,
 	};
 
-	shader_obj: vk.PhysicalDeviceShaderObjectFeaturesEXT = {
-		sType = .PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT,
-		shaderObject = true,
-	}
-	desc_buf: vk.PhysicalDeviceDescriptorBufferFeaturesEXT = {
-		sType = .PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
-		descriptorBuffer = true,
-	}
-	coherent_memory: vk.PhysicalDeviceCoherentMemoryFeaturesAMD = {
-		sType = .PHYSICAL_DEVICE_COHERENT_MEMORY_FEATURES_AMD,
-		deviceCoherentMemory = true,
-	}
     maintenance5: vk.PhysicalDeviceMaintenance5FeaturesKHR = {
         sType = .PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES_KHR,
         maintenance5 = true,
@@ -225,13 +134,11 @@ create_context_device :: proc(ctx: ^Context, selected_queues: []GPU_Queue) -> (e
 	features.pNext = &vulkan_features11
 	vulkan_features11.pNext = &vulkan_features12
 	vulkan_features12.pNext = &vulkan_features13
-	vulkan_features13.pNext = &shader_obj
-	shader_obj.pNext = &coherent_memory
-    coherent_memory.pNext = &maintenance5
+	vulkan_features13.pNext = &maintenance5
 
 
 
-    ctx.device = create_logical_device(ctx.gpu, selected_queues, device_extensions, &features) or_return
+    ctx.device = create_logical_device(ctx.gpu, ctx.queue, device_extensions, &features) or_return
 
     return
 }
@@ -257,7 +164,7 @@ create_context_allocator :: proc(ctx: ^Context) -> Error{
 }
 
 create_graphics_module :: proc(ctx: ^Context, window_name: cstring, w,h: i32, flags: sdl.WindowFlags) -> (mod: Graphics_Module, err: Error){
-    mod.window =  create_window("foo", w, h, {.RESIZABLE}) or_return
+    mod.window =  create_window("foo", w, h, {.VULKAN}) or_return
     mod.surface = create_surface(mod.window, ctx.instance) or_return
     mod.swapchain = create_swapchain(ctx.device, ctx.gpu, mod.surface, mod.window) or_return
 

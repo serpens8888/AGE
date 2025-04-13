@@ -32,19 +32,16 @@ Vertex ::  struct{
     texcoord: [2]f32,
 }
 
-get_binding_desc :: proc() -> vk.VertexInputBindingDescription2EXT{
+get_binding_desc :: proc() -> vk.VertexInputBindingDescription{
     return{
-        sType = .VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT,
         binding = 0,
         stride = size_of(Vertex),
         inputRate = .VERTEX,
-        divisor = 1,
     }
 }
 
-get_pos_attr_desc :: proc() -> vk.VertexInputAttributeDescription2EXT{
+get_pos_attr_desc :: proc() -> vk.VertexInputAttributeDescription{
     return {
-        sType = .VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
         binding = 0,
         location = 0,
         format = .R32G32B32_SFLOAT,
@@ -52,9 +49,8 @@ get_pos_attr_desc :: proc() -> vk.VertexInputAttributeDescription2EXT{
     }
 }
 
-get_norm_attr_desc :: proc() -> vk.VertexInputAttributeDescription2EXT{
+get_norm_attr_desc :: proc() -> vk.VertexInputAttributeDescription{
     return {
-        sType = .VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
         binding = 0,
         location = 1,
         format = .R32G32B32_SFLOAT,
@@ -62,9 +58,8 @@ get_norm_attr_desc :: proc() -> vk.VertexInputAttributeDescription2EXT{
     }
 }
 
-get_col_attr_desc :: proc() -> vk.VertexInputAttributeDescription2EXT{
+get_col_attr_desc :: proc() -> vk.VertexInputAttributeDescription{
     return {
-        sType = .VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
         binding = 0,
         location = 2,
         format = .R32G32B32_SFLOAT,
@@ -72,9 +67,8 @@ get_col_attr_desc :: proc() -> vk.VertexInputAttributeDescription2EXT{
     }
 }
 
-get_texcoord_attr_desc :: proc() -> vk.VertexInputAttributeDescription2EXT{
+get_texcoord_attr_desc :: proc() -> vk.VertexInputAttributeDescription{
     return {
-        sType = .VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
         binding = 0,
         location = 3,
         format = .R32G32_SFLOAT,

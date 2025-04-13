@@ -1,34 +1,40 @@
-// Vertex Shader: Hardcoded 6 vertices to cover the screen and compute UVs.
-struct VSOutput {
+
+
+struct v_in{
+	[vk_location(0)] float3 pos;
+	[vk_location(1)] float3 normal;
+    [vk_location(2)] float3 color;
+	[vk_location(3)] float2 uv;
+};
+
+static float2 positions[3] = float2[](
+    float2(0.0, -0.5),
+    float2(0.5, 0.5),
+    float2(-0.5, 0.5),
+);
+
+static float3 colors[3] = float3[](
+    float3(1.0, 0.0, 0.0),
+    float3(0.0, 1.0, 0.0),
+    float3(0.0, 0.0, 1.0),
+);
+
+struct v_out{
     float4 position : SV_Position;
-    float2 uv       : TEXCOORD0;
+    float3 color : COLOR0;
 };
 
 [shader("vertex")]
-VSOutput vertexMain(uint vertexID : SV_VertexID)
-{
-    // Two triangles forming a full screen quad
-    float2 positions[6] = {
-        float2(-1.0, -1.0),
-        float2( 1.0, -1.0),
-        float2( 1.0,  1.0),
-        float2(-1.0, -1.0),
-        float2( 1.0,  1.0),
-        float2(-1.0,  1.0)
-    };
-
-    VSOutput output;
-    float2 pos = positions[vertexID];
-    output.position = float4(pos, 0.0, 1.0);
-    // Map from clip-space (-1,1) to UV (0,1)
-    output.uv = pos * 0.5 + 0.5;
-    return output;
+v_out vertexMain(v_in input, uint id : SV_VertexID){
+    v_out out;
+    out.position = float4(input.pos, 1.0);
+    out.color = input.color;
+    return out;
 }
 
-// Fragment Shader: Draws UV coordinates as color.
+
+// fragment shader entry point
 [shader("fragment")]
-float4 fragmentMain(VSOutput input) : SV_Target
-{
-    // UV coordinates are used to color the fragment (R=U, G=V).
-    return float4(input.uv, 1.0, 1.0);
+float4 fragmentMain(v_out input) : SV_Target{
+    return float4(input.color, 1.0);
 }

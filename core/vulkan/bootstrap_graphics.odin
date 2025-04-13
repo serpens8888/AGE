@@ -93,6 +93,7 @@ create_swapchain :: proc(
 	swapchain.images = make([]vk.Image, image_count) or_return
 	vk.GetSwapchainImagesKHR(device, swapchain.handle, &image_count, raw_data(swapchain.images))
 
+
     swapchain.views = make([]vk.ImageView, image_count) or_return
 
     for &view, i in swapchain.views{
@@ -171,50 +172,6 @@ destroy_swapchain :: proc(device: vk.Device, swapchain: ^Swapchain){
     delete(swapchain.views)
     delete(swapchain.images)
 }
-
-
-fix_swapchain_image_format :: proc(device: vk.Device, swapchain: Swapchain, pool: vk.CommandPool, queue: vk.Queue) -> Error{
-    cmd := begin_single_time_cmd(device, pool) or_return
-	image_subresource_range: vk.ImageSubresourceRange = {
-		aspectMask = {.COLOR},
-		baseMipLevel = 0,
-		levelCount = 1,
-		baseArrayLayer = 0,
-		layerCount = 1,
-	}
-
-    image_barriers := make([]vk.ImageMemoryBarrier, len(swapchain.images))
-
-    for &barrier, i in image_barriers{
-
-        barrier = {
-            sType = .IMAGE_MEMORY_BARRIER,
-            dstAccessMask = {.COLOR_ATTACHMENT_WRITE},
-            srcQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
-            dstQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
-            oldLayout = .UNDEFINED,
-            newLayout = .PRESENT_SRC_KHR,
-            image = swapchain.images[i],
-            subresourceRange = image_subresource_range,
-        }
-    }
-
-	vk.CmdPipelineBarrier(cmd, {.TOP_OF_PIPE}, {.COLOR_ATTACHMENT_OUTPUT}, {}, 0, nil, 0, nil, u32(len(image_barriers)), raw_data(image_barriers))
-
-    submit_single_time_cmd(device, pool, queue, &cmd) or_return
-
-    return nil
-}
-
-
-
-
-
-
-
-
-
-
 
 
 

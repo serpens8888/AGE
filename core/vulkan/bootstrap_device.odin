@@ -112,40 +112,25 @@ validate_device_extensions :: proc(gpu: vk.PhysicalDevice, required_extensions: 
 	return true, nil
 }
 
-create_logical_device :: proc(gpu: vk.PhysicalDevice, queues: []GPU_Queue, required_extensions: []cstring, device_features: ^vk.PhysicalDeviceFeatures2) -> (device: vk.Device, err: Error){
+create_logical_device :: proc(gpu: vk.PhysicalDevice, queue: GPU_Queue, required_extensions: []cstring, device_features: ^vk.PhysicalDeviceFeatures2) -> (device: vk.Device, err: Error){
 
-    //*get the queue create infos
-
-    queue_family_map := make(map[u32]u32)
-    defer delete(queue_family_map)
-
-    for queue in queues {
-        queue_family_map[queue.family] += 1
-    }
-
-    queue_create_infos := make([]vk.DeviceQueueCreateInfo, len(queue_family_map)) or_return
-    defer delete(queue_create_infos)
-
-    // Instead of relying on map iteration order, use a separate counter
-    i := 0
-    for key in queue_family_map {
-        priorities := make([]f32, queue_family_map[key]) or_return
-        defer delete(priorities)
-
-        for &priority in priorities{ priority = 1.0 }
-
-        queue_create_infos[i] = make_device_queue_create_info(key, queue_family_map[key], priorities)
-        i += 1
-    }
+    //get the queue create infos
 
 
-    //*create device
+    queue_create_info: vk.DeviceQueueCreateInfo
+
+    priority: f32 = 1.0
+
+    queue_create_info = make_device_queue_create_info(queue.family, 1, &priority)
+
+
+    //create device
 
     device_create_info: vk.DeviceCreateInfo = {
        	sType = .DEVICE_CREATE_INFO,
 		pNext = device_features,
-		pQueueCreateInfos = raw_data(queue_create_infos),
-		queueCreateInfoCount = u32(len(queue_create_infos)),
+		pQueueCreateInfos = &queue_create_info,
+		queueCreateInfoCount = 1,
 		ppEnabledExtensionNames = raw_data(required_extensions),
 		enabledExtensionCount = u32(len(required_extensions)),
     }
@@ -156,15 +141,13 @@ create_logical_device :: proc(gpu: vk.PhysicalDevice, queues: []GPU_Queue, requi
 }
 
 
-make_device_queue_create_info :: proc(family: u32, count: u32, priorities: []f32) -> vk.DeviceQueueCreateInfo{
+make_device_queue_create_info :: proc(family: u32, count: u32, priority: ^f32) -> vk.DeviceQueueCreateInfo{
 
-    assert(count == u32(len(priorities)), "there must be one priority for each queue")
-    
     return {
         sType = .DEVICE_QUEUE_CREATE_INFO,
         queueFamilyIndex = family,
         queueCount = count,
-        pQueuePriorities = raw_data(priorities),
+        pQueuePriorities = priority,
     }
 
 }
