@@ -174,6 +174,40 @@ destroy_swapchain :: proc(device: vk.Device, swapchain: ^Swapchain){
 }
 
 
+@(require_results) recreate_swapchain :: proc(ctx: Context, mod: ^Graphics_Module) -> Error{
+	event: sdl.Event
+	w: i32 = 0
+	h: i32 = 0
+
+	sdl.GetWindowSize(mod.window, &w, &h)
+
+	for{
+		flags := sdl.GetWindowFlags(mod.window)
+
+		if(.MINIMIZED in flags){
+			if(!sdl.WaitEvent(&event)){
+				panic("failed to wait on event")
+			}
+
+			if(event.type == .WINDOW_RESTORED){
+				break
+			}
+		} else{
+			 break
+	    }
+	}
+
+    old_swapchain := mod.swapchain
+    
+    mod.swapchain = create_swapchain(ctx.device, ctx.gpu, mod.surface, mod.window, old_swapchain.handle) or_return
+
+    destroy_swapchain(ctx.device, &old_swapchain)
+
+    return nil
+
+}
+
+
 
 
 

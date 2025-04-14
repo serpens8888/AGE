@@ -139,7 +139,12 @@ create_graphics_pipeline :: proc(device: vk.Device, graphics_mod: Graphics_Modul
         pAttachments = &attachment
     }
 
-    //dynamic_state: vk.PipelineDynamicStateCreateInfo = {}
+    dynamic_states: []vk.DynamicState = {.VIEWPORT, .SCISSOR }
+    dynamic_state: vk.PipelineDynamicStateCreateInfo = {
+        sType = .PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        dynamicStateCount = 2,
+        pDynamicStates = raw_data(dynamic_states)
+    }
 
     color_format := graphics_mod.swapchain.format
 
@@ -163,7 +168,7 @@ create_graphics_pipeline :: proc(device: vk.Device, graphics_mod: Graphics_Modul
         pMultisampleState = &multisampling,
         pDepthStencilState = &depth_stencil,
         pColorBlendState = &color_blend,
-        //pDynamicState = &dynamic_state,
+        pDynamicState = &dynamic_state,
         layout = layout,
     }
 
