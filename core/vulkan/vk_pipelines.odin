@@ -51,7 +51,7 @@ create_graphics_pipeline :: proc(device: vk.Device, graphics_mod: Graphics_Modul
         get_pos_attr_desc(),
         get_norm_attr_desc(),
         get_col_attr_desc(),
-        get_texcoord_attr_desc()
+        get_uv_attr_desc()
     }
 
     vertex_input: vk.PipelineVertexInputStateCreateInfo = {
@@ -122,7 +122,9 @@ create_graphics_pipeline :: proc(device: vk.Device, graphics_mod: Graphics_Modul
         // I SPEND 2 DAYS DEBUGGING BECAUSE I FORGOT TO ADD THIS ADJHASKDJAHSDKJASDHAKSJ 
         //RAAJHAJAJAAFSDLKFJSDL:KJFJSDL:FKJHDSFKLJSDHFLKJADSHDFKASHJFGADKHJFghdslkghjdfsbkjghlasdhf
         //GREEHAGAAGAAAAAAAAAAAAAAAAAAAAAAAGGGGGAGHGHGHGHGHGHGHHGGHGUHGUAHGUAHGAIUHSGKJASHR
-        colorWriteMask = {.R, .G, .B, .A},
+        colorWriteMask = {.R, .G, .B, .A}, //guh
+
+
         blendEnable = true,
         srcColorBlendFactor = .SRC_ALPHA,
         dstColorBlendFactor = .ONE_MINUS_SRC_ALPHA,

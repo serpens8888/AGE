@@ -1,6 +1,7 @@
 package vulk
 
 import vk "vendor:vulkan"
+import "vma"
 
 
 FRAMES_IN_FLIGHT :: 2
@@ -11,48 +12,92 @@ Render_State :: struct{
     in_flight: [FRAMES_IN_FLIGHT]vk.Fence,
     current_frame: u32, //current frame in flight
     image_index: u32, //the index of the current swapchain image
-    pool: vk.CommandPool,
-
+    pool: vk.CommandPool,  //a command pool for this rendering thread
     cmds: [FRAMES_IN_FLIGHT]vk.CommandBuffer,
+    verts: Allocated_Buffer, //scratch vertex buffer 
+    vert_offset: i32, //current offset into the vertex buffer
+    indices: Allocated_Buffer //rectangle index buffer - {0,1,2,0,2,3}
+}
+
+draw_rectangle :: proc(x,y,w,h: f32, state: ^Render_State, pipeline: vk.Pipeline){
+    bl: Vertex = {
+        pos = {x, y, 0},
+        uv = {1,0},
+    }
+
+    tl: Vertex = {
+        pos = {x, y+h, 0},
+        uv = {0,0}
+    }
+
+    tr: Vertex = {
+        pos = {x+w, y+h, 0},
+        uv = {0,1}
+    }
+
+    br: Vertex = {
+        pos = {x+w, y, 0},
+        uv = {1,1}
+    }
+
+    write_verts(state.verts, uintptr(state.vert_offset*size_of(Vertex)), {bl, tl, tr, br}) 
+
+
+    cmd := state.cmds[state.current_frame]
+
+    vk.CmdBindPipeline(cmd, .GRAPHICS, pipeline)
+    vk.CmdDrawIndexed(cmd, 6, 1, 0, state.vert_offset, 0)
+
+    state.vert_offset += 4
+
 }
 
 
-@(require_results) create_render_state :: proc(device: vk.Device, pool: vk.CommandPool) -> (state: Render_State, err: Error){
+@(require_results) create_render_state :: proc(ctx: Context, pool: vk.CommandPool) -> (state: Render_State, err: Error){
 
     for &sem in state.image_available{
-        sem = create_semaphore(device) or_return
+        sem = create_semaphore(ctx.device) or_return
     }
 
     for &sem in state.render_finished{
-        sem = create_semaphore(device) or_return
+        sem = create_semaphore(ctx.device) or_return
     }
 
     for &fence in state.in_flight{
-        fence = create_fence(device, {.SIGNALED}) or_return
+        fence = create_fence(ctx.device, {.SIGNALED}) or_return
     }
 
     state.pool = pool
 
     alloc_info := make_command_buffer_allocate_info(state.pool, FRAMES_IN_FLIGHT)
-    vk.AllocateCommandBuffers(device, &alloc_info, raw_data(state.cmds[:]))
+    vk.AllocateCommandBuffers(ctx.device, &alloc_info, raw_data(state.cmds[:]))
+
+    indices: []u32 = {0, 1, 2, 0, 2, 3}
+    state.indices = create_index_buffer(ctx.device, ctx.queue.handle, state.pool, ctx.allocator, indices) or_return
+    
+    state.verts = create_vertex_buffer_empty(ctx.device, ctx.allocator, 100000) or_return
+    vma.map_memory(ctx.allocator, state.verts.allocation, &state.verts.mapped_ptr) or_return
 
     return
 }
 
-destroy_render_state :: proc(device: vk.Device, state: ^Render_State){
+destroy_render_state :: proc(ctx: Context, state: ^Render_State){
     for &sem in state.image_available{
-        vk.DestroySemaphore(device, sem, nil)
+        vk.DestroySemaphore(ctx.device, sem, nil)
     }
 
     for &sem in state.render_finished{
-        vk.DestroySemaphore(device, sem, nil)
+        vk.DestroySemaphore(ctx.device, sem, nil)
     }
 
     for &fence in state.in_flight{
-        vk.DestroyFence(device, fence, nil)
+        vk.DestroyFence(ctx.device, fence, nil)
     }
 
-    vk.FreeCommandBuffers(device, state.pool, FRAMES_IN_FLIGHT, raw_data(state.cmds[:]))
+    vk.FreeCommandBuffers(ctx.device, state.pool, FRAMES_IN_FLIGHT, raw_data(state.cmds[:]))
+
+    free_buffer(ctx.allocator, state.indices)
+    free_buffer(ctx.allocator, state.verts)
 }
 
 
@@ -153,6 +198,10 @@ destroy_render_state :: proc(device: vk.Device, state: ^Render_State){
 
     vk.CmdBeginRendering(cmd, &rendering_info)
 
+    offsets: []vk.DeviceSize = {0}
+    vk.CmdBindVertexBuffers(cmd, 0, 1, &state.verts.handle, raw_data(offsets))
+    vk.CmdBindIndexBuffer(cmd, state.indices.handle, 0, .UINT32)
+
     return cmd
 }
 
@@ -223,4 +272,11 @@ end_rendering :: proc(ctx: Context, mod: ^Graphics_Module, state: ^Render_State)
 	}
 
     state.current_frame = (state.current_frame + 1) % FRAMES_IN_FLIGHT
+
+    state.vert_offset = 0
 }
+
+
+
+
+

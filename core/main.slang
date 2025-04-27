@@ -22,6 +22,7 @@ static float3 colors[3] = float3[](
 struct v_out{
     float4 position : SV_Position;
     float3 color : COLOR0;
+    float2 uv;
 };
 
 [shader("vertex")]
@@ -29,6 +30,7 @@ v_out vertexMain(v_in input, uint id : SV_VertexID){
     v_out out;
     out.position = float4(input.pos, 1.0);
     out.color = input.color;
+    out.uv = input.uv;
     return out;
 }
 
@@ -36,5 +38,5 @@ v_out vertexMain(v_in input, uint id : SV_VertexID){
 // fragment shader entry point
 [shader("fragment")]
 float4 fragmentMain(v_out input) : SV_Target{
-    return float4(input.color, 1.0);
+    return float4(input.uv, 0.0, 1.0);
 }

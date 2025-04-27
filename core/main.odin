@@ -8,15 +8,7 @@ import "core:fmt"
 import "core:math" 
 import "core:math/rand" 
 
-verts: []vulk.Vertex = {
-    {pos = {-1.0, -1.0, 0.0}, col = {1,0,0}},
-    {pos = {1.0, 1.0, 0.0  }, col = {0,1,0}},
-    {pos = {-1.0, 1.0, 0.0 }, col = {0,0,1}},
-    {pos = {-1.0, -1.0, 0.0}, col = {1,0,0}},
-    {pos = { 1.0, -1.0, 0.0}, col = {1,1,0}},
-    {pos = { 1.0,  1.0, 0.0}, col = {0,1,0}},
-}
- 
+
 main :: proc(){
 
     vulk.compile_slang("core/main.slang", "core/main.spv")
@@ -41,10 +33,7 @@ main :: proc(){
     vk.CreateCommandPool(ctx.device, &pool_info, nil, &pool)
     defer vk.DestroyCommandPool(ctx.device, pool, nil)
 
-    vert_buf, vbuf_err := vulk.create_vertex_buffer(ctx.device, ctx.queue.handle, pool, ctx.allocator, verts)
-    defer vulk.free_buffer(ctx.allocator, vert_buf)
-
-    mod, gfx_err := vulk.create_graphics_module(&ctx, "foo", 1024, 1024, {.RESIZABLE, .VULKAN})
+    mod, gfx_err := vulk.create_graphics_module(&ctx, "foo", 1280, 720, {.RESIZABLE, .VULKAN})
     defer vulk.destroy_graphics_module(&ctx, &mod)
 
     layout, layout_err := vulk.create_pipeline_layout(ctx.device, {}, {})
@@ -57,8 +46,8 @@ main :: proc(){
     defer vk.DestroyPipeline(ctx.device, pipeline, nil)
 
 
-    state, rs_err :=  vulk.create_render_state(ctx.device, pool)
-    defer vulk.destroy_render_state(ctx.device, &state)
+    state, rs_err :=  vulk.create_render_state(ctx, pool)
+    defer vulk.destroy_render_state(ctx, &state)
 
     running := true
 	event: sdl.Event
@@ -78,14 +67,13 @@ main :: proc(){
 			}
 
             cmd := vulk.begin_rendering(ctx, &mod, &state)
-                
-            offsets: []vk.DeviceSize = {0}
-            vk.CmdBindVertexBuffers(cmd, 0, 1, &vert_buf.handle, raw_data(offsets))
+ 
+            vulk.draw_rectangle(0,0, .5, .5, &state, pipeline)
+            vulk.draw_rectangle(-1,-1, .1, .1, &state, pipeline)
+            vulk.draw_rectangle(.8,-.8, .2, .2, &state, pipeline)
+            vulk.draw_rectangle(-.4,.4, .18, .32, &state, pipeline)
+            vulk.draw_rectangle(-.1,-.7, .8, .4, &state, pipeline)
 
-            vk.CmdBindPipeline(cmd, .GRAPHICS, pipeline)
-            
-            vk.CmdDraw(cmd, u32(len(verts)), 1, 0, 0)
-            
             vulk.end_rendering(ctx, &mod, &state)
             
 		}

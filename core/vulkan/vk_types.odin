@@ -29,7 +29,7 @@ Vertex ::  struct{
     pos: [3]f32,
     normal: [3]f32,
     col: [3]f32,
-    texcoord: [2]f32,
+    uv: [2]f32,
 }
 
 get_binding_desc :: proc() -> vk.VertexInputBindingDescription{
@@ -67,12 +67,12 @@ get_col_attr_desc :: proc() -> vk.VertexInputAttributeDescription{
     }
 }
 
-get_texcoord_attr_desc :: proc() -> vk.VertexInputAttributeDescription{
+get_uv_attr_desc :: proc() -> vk.VertexInputAttributeDescription{
     return {
         binding = 0,
         location = 3,
         format = .R32G32_SFLOAT,
-        offset = u32(offset_of(Vertex, texcoord))
+        offset = u32(offset_of(Vertex, uv))
     }
 }
 

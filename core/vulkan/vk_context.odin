@@ -29,13 +29,6 @@ Graphics_Module :: struct{
 
 device_extensions: []cstring : {
     "VK_KHR_swapchain",
-    "VK_KHR_dynamic_rendering",
-    "VK_KHR_buffer_device_address",
-    "VK_KHR_synchronization2",
-    "VK_KHR_maintenance5",
-
-    "VK_EXT_descriptor_indexing",
-
 }
 
 //ORDER IS VERY IMPORTANT
@@ -118,6 +111,10 @@ create_context_device :: proc(ctx: ^Context) -> (err: Error){
 		runtimeDescriptorArray = true,
 		bufferDeviceAddress = true,
 		descriptorIndexing = true,
+        //shaderSampledImageArrayNonUniformIndexing = true,
+        //runtimeDescriptorArray = true,
+        //descriptorBindingVariableDescriptorCount = true,
+        //descriptorBindingPartiallyBound = true,
 	};
 
 	vulkan_features13: vk.PhysicalDeviceVulkan13Features = {
@@ -126,15 +123,10 @@ create_context_device :: proc(ctx: ^Context) -> (err: Error){
         synchronization2 = true,
 	};
 
-    maintenance5: vk.PhysicalDeviceMaintenance5FeaturesKHR = {
-        sType = .PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES_KHR,
-        maintenance5 = true,
-    }
 
 	features.pNext = &vulkan_features11
 	vulkan_features11.pNext = &vulkan_features12
 	vulkan_features12.pNext = &vulkan_features13
-	vulkan_features13.pNext = &maintenance5
 
 
 
@@ -150,7 +142,7 @@ create_context_allocator :: proc(ctx: ^Context) -> Error{
     allocator_create_info: vma.Allocator_Create_Info = {
         flags = {.Buffer_Device_Address, .Amd_Device_Coherent_Memory, .Khr_Maintenance5},
         instance = ctx.instance,
-        vulkan_api_version = 1004000, // 1.4
+        vulkan_api_version = 1003000, // 1.3
         physical_device = ctx.gpu,
         device = ctx.device,
         vulkan_functions = &vma_vk_functions,

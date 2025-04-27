@@ -26,7 +26,6 @@ allocate_image :: proc(
 
 
 
-
 create_image_view :: proc(
     device: vk.Device,
     image: vk.Image,

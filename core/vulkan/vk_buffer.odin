@@ -4,23 +4,18 @@ package vulk
 import vk "vendor:vulkan"
 import "vma"
 import "core:mem"
+import "core:fmt"
 
 @(require_results)
 allocate_buffer :: proc(
     allocator: vma.Allocator,
     buffer_info: ^vk.BufferCreateInfo,
-    usage: vk.BufferUsageFlags2,
+    usage: vk.BufferUsageFlags,
     mem_properties: vk.MemoryPropertyFlags,
     alloc_flags: vma.Allocation_Create_Flags = {.Strategy_Min_Memory, .Strategy_Min_Time, .Strategy_Min_Offset},
 ) -> (buffer: Allocated_Buffer, err: Error){
 
-    usage_info: vk.BufferUsageFlags2CreateInfo = {
-        sType = .BUFFER_USAGE_FLAGS_2_CREATE_INFO,
-        pNext = nil,
-        usage = usage,
-    }
-
-    buffer_info.pNext = &usage_info
+    buffer_info.usage = usage
     
     allocation_create_info: vma.Allocation_Create_Info = {
         flags = alloc_flags,
@@ -150,12 +145,43 @@ create_vertex_buffer :: proc(
 
     buffer_info := make_buffer_create_info(vk.DeviceSize(size), {})
     vertex_buffer = allocate_buffer(allocator, &buffer_info, {.VERTEX_BUFFER, .TRANSFER_DST}, {.HOST_VISIBLE, .HOST_COHERENT}) or_return
+    fmt.eprintln("TODO: make the vertex buffer device local")
 
     copy_buffer(device, transfer_queue, transfer_pool, staging_buffer, vertex_buffer, vk.DeviceSize(size)) or_return
 
     vma.destroy_buffer(allocator, staging_buffer.handle, staging_buffer.allocation)
+    
 
     return 
+}
+
+create_vertex_buffer_empty :: proc(
+    device: vk.Device,
+    allocator: vma.Allocator,
+    vert_count: uint
+) -> (vertex_buffer: Allocated_Buffer, err: Error){
+    size:= vert_count * size_of(Vertex)
+
+    buffer_info := make_buffer_create_info(vk.DeviceSize(size), {})
+    vertex_buffer = allocate_buffer(allocator, &buffer_info, {.VERTEX_BUFFER, .TRANSFER_DST}, {.HOST_VISIBLE, .HOST_COHERENT}) or_return
+
+    return
+}
+
+write_verts :: proc(
+    vertex_buffer: Allocated_Buffer,
+    offset: uintptr,
+    verts: []Vertex,
+){
+    size:= len(verts) * size_of(Vertex)
+    dst := uintptr(vertex_buffer.mapped_ptr) + offset
+
+    if(offset+uintptr(size) > uintptr(vertex_buffer.alloc_info.size)){
+        fmt.panicf("vertex buffer overflow: buffer size = %n, attempted to write to: %n", vertex_buffer.alloc_info.size, uint(offset)+uint(size))
+    }
+
+    mem.copy(rawptr(dst), raw_data(verts), size)
+    
 }
 
 @(require_results)
