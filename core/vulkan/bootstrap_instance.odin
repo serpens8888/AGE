@@ -139,7 +139,7 @@ validate_instance_extensions :: proc(requested_extensions: [dynamic]cstring) -> 
 
 }
 
-debug_callback_linux :: proc "stdcall" (severity: vk.DebugUtilsMessageSeverityFlagsEXT,
+debug_callback_linux :: proc "cdecl" (severity: vk.DebugUtilsMessageSeverityFlagsEXT,
 	message_type: vk.DebugUtilsMessageTypeFlagsEXT,
 	callback_data: ^vk.DebugUtilsMessengerCallbackDataEXT,
 	user_data: rawptr) -> b32{
