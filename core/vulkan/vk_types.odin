@@ -1,22 +1,22 @@
 package vulk
 
-import vk "vendor:vulkan"
-import vma "vma"
 import "base:runtime"
 import "core:os"
+import vk "vendor:vulkan"
+import vma "vma"
 
 
 
 
-Error :: union #shared_nil{
+Error :: union #shared_nil {
     vk.Result,
     runtime.Allocator_Error,
     os.Error,
     Vulk_Error,
 }
 
-Vulk_Error :: enum{
-    SDL_FAILURE
+Vulk_Error :: enum {
+    SDL_FAILURE,
 }
 
 
@@ -25,54 +25,56 @@ Vulk_Error :: enum{
  * Vertex: a point in 3d space
 */
 
-Vertex ::  struct{ 
-    pos: [3]f32,
+Vertex :: struct {
+    pos:    [3]f32,
     normal: [3]f32,
-    col: [3]f32,
-    uv: [2]f32,
+    col:    [3]f32,
+    uv:     [2]f32,
 }
 
-get_binding_desc :: proc() -> vk.VertexInputBindingDescription{
-    return{
-        binding = 0,
-        stride = size_of(Vertex),
-        inputRate = .VERTEX,
-    }
+Index :: distinct u32
+
+Color :: struct #packed {
+    r, g, b, a: f32,
 }
 
-get_pos_attr_desc :: proc() -> vk.VertexInputAttributeDescription{
+get_binding_desc :: proc() -> vk.VertexInputBindingDescription {
+    return {binding = 0, stride = size_of(Vertex), inputRate = .VERTEX}
+}
+
+get_pos_attr_desc :: proc() -> vk.VertexInputAttributeDescription {
     return {
         binding = 0,
         location = 0,
         format = .R32G32B32_SFLOAT,
-        offset = u32(offset_of(Vertex, pos))
+        offset = u32(offset_of(Vertex, pos)),
     }
 }
 
-get_norm_attr_desc :: proc() -> vk.VertexInputAttributeDescription{
+get_norm_attr_desc :: proc() -> vk.VertexInputAttributeDescription {
     return {
         binding = 0,
         location = 1,
         format = .R32G32B32_SFLOAT,
-        offset = u32(offset_of(Vertex, normal))
+        offset = u32(offset_of(Vertex, normal)),
     }
 }
 
-get_col_attr_desc :: proc() -> vk.VertexInputAttributeDescription{
+get_col_attr_desc :: proc() -> vk.VertexInputAttributeDescription {
     return {
         binding = 0,
         location = 2,
         format = .R32G32B32_SFLOAT,
-        offset = u32(offset_of(Vertex, col))
+        offset = u32(offset_of(Vertex, col)),
     }
 }
 
-get_uv_attr_desc :: proc() -> vk.VertexInputAttributeDescription{
+get_uv_attr_desc :: proc() -> vk.VertexInputAttributeDescription {
     return {
         binding = 0,
         location = 3,
         format = .R32G32_SFLOAT,
-        offset = u32(offset_of(Vertex, uv))
+        offset = u32(offset_of(Vertex, uv)),
     }
 }
 
@@ -95,11 +97,11 @@ get_uv_attr_desc :: proc() -> vk.VertexInputAttributeDescription{
  * compute, transfer, and sparse binding operations.
 */
 
-GPU_Queue :: struct{
-	family: u32, //the index of the queue family
-	index: u32, //the index of the queue in said family
-	flags: vk.QueueFlags, //the suported operations of the family
-    handle: vk.Queue //the handle to the created queue
+GPU_Queue :: struct {
+    family: u32, //the index of the queue family
+    index:  u32, //the index of the queue in said family
+    flags:  vk.QueueFlags, //the suported operations of the family
+    handle: vk.Queue, //the handle to the created queue
 }
 
 /*
@@ -110,13 +112,12 @@ GPU_Queue :: struct{
   * a struct of structs of structs of..., allowing us to avoid binding buffer types.
 */
 
-Allocated_Buffer :: struct{
-	handle: vk.Buffer, //vulkan handle for the image
-	allocation: vma.Allocation, //vma allocation on the gpu
-	alloc_info: vma.Allocation_Info, //info about the VMA allocation
+Allocated_Buffer :: struct {
+    handle:     vk.Buffer, //vulkan handle for the image
+    allocation: vma.Allocation, //vma allocation on the gpu
+    alloc_info: vma.Allocation_Info, //info about the VMA allocation
     mapped_ptr: rawptr, //pointer for mapping
-	address: vk.DeviceAddress, //pointer to buffer
-
+    address:    vk.DeviceAddress, //pointer to buffer
 }
 
 /*
@@ -127,25 +128,25 @@ Allocated_Buffer :: struct{
  * we must put them into a descriptor set or descriptor buffer.
 */
 
-Allocated_Image :: struct{ //images need to be put into descriptor buffers before being passed
-	handle: vk.Image, //vulkan handle for image
-	allocation: vma.Allocation, //vma allocation on gpu
+Allocated_Image :: struct {
+    //images need to be put into descriptor buffers before being passed
+    handle:     vk.Image, //vulkan handle for image
+    allocation: vma.Allocation, //vma allocation on gpu
     alloc_info: vma.Allocation_Info,
-	view: vk.ImageView, //image view of the allocated image
-	extent: vk.Extent3D, //image extent
-	format: vk.Format //format of the image
+    view:       vk.ImageView, //image view of the allocated image
+    extent:     vk.Extent3D, //image extent
+    format:     vk.Format, //format of the image
 }
 
 /*
  * Swapchain: the vulkan structure responsible for image presentation
 */
 
-Swapchain :: struct{
+Swapchain :: struct {
     handle: vk.SwapchainKHR, //handle to swapchain
     images: []vk.Image, //the swapchains images
-    views: []vk.ImageView, //images views of the swapchains images
+    views:  []vk.ImageView, //images views of the swapchains images
     format: vk.Format, //the formap of the swapchain images
     extent: vk.Extent2D, //the extent of the swapchain images
 }
-
 
