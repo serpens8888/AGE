@@ -1,5 +1,4 @@
 package core
-
 import aud "audio"
 import "core:fmt"
 import "core:math"
@@ -25,8 +24,8 @@ main :: proc() {
     ensure(sdl.Init({.VIDEO, .AUDIO}))
     defer sdl.Quit()
 
-    manager, _ := vulk.create_descriptors(ctx.device)
-    defer vulk.destroy_desriptors(ctx.device, manager)
+    descriptors, _ := vulk.create_descriptors(ctx.device)
+    defer vulk.destroy_desriptors(ctx.device, descriptors)
 
     pool: vk.CommandPool
 
@@ -60,6 +59,7 @@ main :: proc() {
         ctx.allocator,
         size_of(vulk.Color),
     )
+    defer vulk.free_buffer(ctx.allocator, uniform_buffer)
 
     layout, layout_err := vulk.create_pipeline_layout(ctx.device, {}, {range})
     defer vk.DestroyPipelineLayout(ctx.device, layout, nil)
@@ -77,6 +77,14 @@ main :: proc() {
         shader_mod,
     )
     defer vk.DestroyPipeline(ctx.device, pipeline, nil)
+
+    image, image_err := vulk.create_image(
+        "assets/images/Red_Square.png",
+        ctx,
+        pool,
+    )
+    defer vulk.destroy_image(ctx, image)
+    fmt.println(image_err)
 
 
     state, rs_err := vulk.create_render_state(ctx, pool, ctx.allocator)
@@ -123,11 +131,8 @@ main :: proc() {
 
         vk.CmdBindPipeline(cmd, .GRAPHICS, pipeline)
 
-        vulk.draw_rectangle(0, 0, .5, .5, &state)
-        vulk.draw_rectangle(-1, -1, .1, .1, &state)
-        vulk.draw_rectangle(.8, -.8, .2, .2, &state)
-        vulk.draw_rectangle(-.4, .4, .18, .32, &state)
-        vulk.draw_rectangle(0 + sin, 0 + sin, 0 + sin, 0 + sin, &state)
+        vulk.draw_rectangle(sin, sin, 0 + sin, 0 + sin, &state)
+        vulk.draw_rectangle(sin, sin, 0 - sin, 0 - sin, &state)
         vulk.draw_batch(&state)
 
         vulk.end_rendering(ctx, &mod, &state)

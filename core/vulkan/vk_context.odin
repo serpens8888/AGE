@@ -13,7 +13,8 @@ Context :: struct {
     allocator:       vma.Allocator, //the vma allocator
     instance:        vk.Instance, //the vulkan instance
     debug_messenger: vk.DebugUtilsMessengerEXT, //the debug messenger for validation layers
-    gpu:             vk.PhysicalDevice, //the handle to the auto selected gpu
+    gpu:             vk.PhysicalDevice, //the handle to the selected gpu
+    gpu_properties:  vk.PhysicalDeviceProperties, //the properties of the physical gpu
     device:          vk.Device, //the vulkan logical device
     queue:           GPU_Queue, //the general purpose gpu_queue
 }
@@ -40,6 +41,7 @@ init_context :: proc(ctx: ^Context) -> (err: Error) {
 
 
     ctx.gpu = choose_gpu(ctx.instance, device_extensions) or_return
+    vk.GetPhysicalDeviceProperties(ctx.gpu, &ctx.gpu_properties)
 
     gpu_queues := enumerate_queues(ctx.gpu) or_return
 

@@ -34,7 +34,7 @@ Vertex :: struct {
 
 Index :: distinct u32
 
-Color :: struct #packed {
+Color :: struct {
     r, g, b, a: f32,
 }
 
@@ -118,24 +118,6 @@ Allocated_Buffer :: struct {
     alloc_info: vma.Allocation_Info, //info about the VMA allocation
     mapped_ptr: rawptr, //pointer for mapping
     address:    vk.DeviceAddress, //pointer to buffer
-}
-
-/*
- * Allocated_Image: Represents an image allocated on the GPU
- *
- * Contains some metadata about the image.
- * Images cannot be passed via a GPU pointer, 
- * we must put them into a descriptor set or descriptor buffer.
-*/
-
-Allocated_Image :: struct {
-    //images need to be put into descriptor buffers before being passed
-    handle:     vk.Image, //vulkan handle for image
-    allocation: vma.Allocation, //vma allocation on gpu
-    alloc_info: vma.Allocation_Info,
-    view:       vk.ImageView, //image view of the allocated image
-    extent:     vk.Extent3D, //image extent
-    format:     vk.Format, //format of the image
 }
 
 /*

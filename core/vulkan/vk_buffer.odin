@@ -164,6 +164,10 @@ create_staging_buffer :: #force_inline proc(
         {.HOST_VISIBLE, .HOST_COHERENT},
     ) or_return
 
+    //we can map the pointer here and never call unmap because the staging buffer is temperary
+    //so it will be deleted which unmaps the pointer anyways (not 100% sure)
+    vma.map_memory(allocator, buffer.allocation, &buffer.mapped_ptr) or_return
+
     return buffer, nil
 }
 
@@ -184,12 +188,7 @@ create_vertex_buffer :: proc(
         vk.DeviceSize(size),
     ) or_return
 
-    data: rawptr
-    check_vk(
-        vma.map_memory(allocator, staging_buffer.allocation, &data),
-    ) or_return
-    mem.copy(data, raw_data(verts), int(size))
-    vma.unmap_memory(allocator, staging_buffer.allocation)
+    mem.copy(staging_buffer.mapped_ptr, raw_data(verts), int(size))
 
     buffer_info := make_buffer_create_info(vk.DeviceSize(size), {})
     vertex_buffer = allocate_buffer(
@@ -295,11 +294,7 @@ create_index_buffer :: proc(
         vk.DeviceSize(size),
     ) or_return
 
-    data: rawptr
-    check_vk(
-        vma.map_memory(allocator, staging_buffer.allocation, &data),
-    ) or_return
-    mem.copy(data, raw_data(indices), int(size))
+    mem.copy(staging_buffer.mapped_ptr, raw_data(indices), int(size))
     vma.unmap_memory(allocator, staging_buffer.allocation)
 
     buffer_info := make_buffer_create_info(vk.DeviceSize(size), {})

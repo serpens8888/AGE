@@ -10,6 +10,7 @@ FRAMES_IN_FLIGHT :: 2
 TRI_INDICES: []Index : {0, 1, 2}
 RECT_INDICES: []Index : {0, 1, 2, 0, 2, 3}
 
+
 Render_State :: struct {
     image_available:   [FRAMES_IN_FLIGHT]vk.Semaphore,
     render_finished:   [FRAMES_IN_FLIGHT]vk.Semaphore,
@@ -27,47 +28,6 @@ Render_State :: struct {
     index_offset:      u32,
 }
 
-Mesh :: struct {
-    vertex_buffer: Allocated_Buffer,
-    index_buffer:  Allocated_Buffer,
-}
-
-Sprite :: struct {
-    top_left: Vertex,
-    w, h:     f32,
-}
-
-Renderable :: union {
-    Mesh,
-}
-
-Entity :: struct {
-    name:       Maybe(string),
-    renderable: Renderable,
-    model_mat:  matrix[4, 4]f32,
-}
-
-Vec2 :: linalg.Vector2f32
-Vec3 :: linalg.Vector3f32
-Vec4 :: linalg.Vector4f32
-
-Mat2 :: linalg.Matrix2f32
-Mat3 :: linalg.Matrix3f32
-Mat4 :: linalg.Matrix4f32
-
-Camera :: struct {
-    position:     Vec3,
-    rotation:     quaternion128,
-    fovy:         f32,
-    aspect_ratio: f32,
-    near:         f32,
-    far:          f32,
-    view:         Mat4,
-    proj:         Mat4,
-}
-
-update_camera :: proc(c: ^Camera) {
-}
 
 
 
