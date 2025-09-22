@@ -38,6 +38,6 @@ Camera :: struct {
     proj:         Mat4,
 }
 
-update_camera :: proc(c: ^Camera) {
+update_camera_matrices :: proc(c: ^Camera) {
 }
 

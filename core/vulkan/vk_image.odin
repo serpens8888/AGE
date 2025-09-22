@@ -56,6 +56,10 @@ create_image :: proc(
         decoded_image = &fallback_image
     }
 
+    defer {
+        if image_err == nil do image.destroy(decoded_image)
+    }
+
     size := vk.DeviceSize(len(pixels)) //multiplying by size_of(u8) is redundant
     staging := create_staging_buffer(ctx.allocator, size) or_return
     defer free_buffer(ctx.allocator, staging)
@@ -133,7 +137,7 @@ create_image :: proc(
     view := create_image_view(ctx.device, handle, ici.format) or_return
 
 
-    if image_err == nil do image.destroy(decoded_image)
+
     return {
             handle,
             allocation,
@@ -282,8 +286,8 @@ copy_buffer_to_image :: proc(
 ) {
     region: vk.BufferImageCopy = {
         bufferOffset = 0,
-        bufferRowLength = 0,
-        bufferImageHeight = 0,
+        bufferRowLength = 0, //assuming they are tightly packed
+        bufferImageHeight = 0, //assuming they are tightly packed
         imageSubresource = {
             aspectMask = {.COLOR},
             mipLevel = 0,
@@ -304,41 +308,6 @@ copy_buffer_to_image :: proc(
     )
 
 }
-@(require_results)
-allocate_image :: proc(
-    allocator: vma.Allocator,
-    image_info: vk.ImageCreateInfo,
-    mem_properties: vk.MemoryPropertyFlags,
-    alloc_flags: vma.Allocation_Create_Flags = {
-        .Strategy_Min_Memory,
-        .Strategy_Min_Time,
-        .Strategy_Min_Offset,
-    },
-) -> (
-    image: Allocated_Image,
-    err: Error,
-) {
-
-    allocation_create_info: vma.Allocation_Create_Info = {
-        flags          = alloc_flags,
-        usage          = .Auto,
-        required_flags = mem_properties,
-    }
-
-    check_vk(
-        vma.create_image(
-            allocator,
-            image_info,
-            allocation_create_info,
-            &image.handle,
-            &image.allocation,
-            &image.alloc_info,
-        ),
-    ) or_return
-
-    return
-}
-
 
 @(require_results)
 create_image_view :: proc(

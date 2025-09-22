@@ -6,6 +6,14 @@ import "core:mem"
 import vk "vendor:vulkan"
 import "vma"
 
+Allocated_Buffer :: struct {
+    handle:     vk.Buffer, //vulkan handle for the image
+    allocation: vma.Allocation, //vma allocation on the gpu
+    alloc_info: vma.Allocation_Info, //info about the VMA allocation
+    mapped_ptr: rawptr, //pointer for mapping
+    address:    vk.DeviceAddress, //pointer to buffer
+}
+
 @(require_results)
 allocate_buffer :: proc(
     allocator: vma.Allocator,
