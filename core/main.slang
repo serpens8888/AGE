@@ -35,8 +35,13 @@ v_out vertexMain(v_in input, uint id : SV_VertexID){
 }
 
 
+layout(set = 0, binding = 0) uniform SamplerState []samplers;
+layout(set = 0, binding = 1) uniform Texture2D []textures;
+
 // fragment shader entry point
 [shader("fragment")]
 float4 fragmentMain(v_out input, float4* color) : SV_Target{
-    return *color + float4(input.uv, 1.0, 1.0);
+    float2 uv = float2(input.uv.y, 1.0 - input.uv.x);
+    float4 col = textures[0].Sample(samplers[0], uv);
+    return col;
 }

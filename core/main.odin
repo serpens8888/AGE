@@ -24,7 +24,8 @@ main :: proc() {
     ensure(sdl.Init({.VIDEO, .AUDIO}))
     defer sdl.Quit()
 
-    descriptors, _ := vulk.create_descriptors(ctx.device)
+    descriptors, desc_err := vulk.create_descriptors(ctx.device)
+    fmt.println(desc_err)
     defer vulk.destroy_desriptors(ctx.device, descriptors)
 
     pool: vk.CommandPool
@@ -61,7 +62,11 @@ main :: proc() {
     )
     defer vulk.free_buffer(ctx.allocator, uniform_buffer)
 
-    layout, layout_err := vulk.create_pipeline_layout(ctx.device, {}, {range})
+    layout, layout_err := vulk.create_pipeline_layout(
+        ctx.device,
+        {descriptors.layout},
+        {range},
+    )
     defer vk.DestroyPipelineLayout(ctx.device, layout, nil)
 
     shader_mod, shader_err := vulk.create_shader_module(
@@ -77,18 +82,22 @@ main :: proc() {
         shader_mod,
     )
     defer vk.DestroyPipeline(ctx.device, pipeline, nil)
+    state, rs_err := vulk.create_render_state(ctx, pool, ctx.allocator)
+    defer vulk.destroy_render_state(ctx, &state)
+
 
     image, image_err := vulk.create_image(
-        "assets/images/Red_Square.png",
+        "assets/images/monkey_think.png",
         ctx,
         pool,
     )
     defer vulk.destroy_image(ctx, image)
-    fmt.println(image_err)
 
+    sampler, sampler_err := vulk.create_sampler(ctx)
+    defer vk.DestroySampler(ctx.device, sampler, nil)
 
-    state, rs_err := vulk.create_render_state(ctx, pool, ctx.allocator)
-    defer vulk.destroy_render_state(ctx, &state)
+    vulk.add_sampled_image(ctx.device, &descriptors, state, image.view)
+    vulk.add_sampler(ctx.device, &descriptors, state, sampler)
 
     running := true
     event: sdl.Event
@@ -111,6 +120,7 @@ main :: proc() {
 
         tick := f32(time.duration_seconds(time.since(start_time)))
         sin := math.sin(tick)
+        cos := math.cos(tick)
 
 
 
@@ -129,10 +139,26 @@ main :: proc() {
             &uniform_buffer.address,
         )
 
+        vk.CmdBindDescriptorSets(
+            cmd,
+            .GRAPHICS,
+            layout,
+            0,
+            1,
+            &descriptors.sets[state.current_frame],
+            0,
+            nil,
+        )
+
         vk.CmdBindPipeline(cmd, .GRAPHICS, pipeline)
 
-        vulk.draw_rectangle(sin, sin, 0 + sin, 0 + sin, &state)
-        vulk.draw_rectangle(sin, sin, 0 - sin, 0 - sin, &state)
+        vulk.draw_rectangle(
+            -abs(sin) / 2,
+            -abs(sin) / 2,
+            abs(sin),
+            abs(sin),
+            &state,
+        )
         vulk.draw_batch(&state)
 
         vulk.end_rendering(ctx, &mod, &state)
