@@ -4,10 +4,12 @@ import "core:fmt"
 import "core:mem"
 import vk "vendor:vulkan"
 
-SAMPLER_ARRAY_BINDING :: 0
-MAX_SAMPLERS :: 100 //I doubt anyone needs this many
 
-IMAGE_ARRAY_BINDING :: 1 //the image binding is on the end so it is dynamic
+//once scenese are defined, change these to be dynamically set based on the amount needed by the scene
+SAMPLER_ARRAY_BINDING :: 0
+MAX_SAMPLERS :: 100
+
+IMAGE_ARRAY_BINDING :: 1
 MAX_IMAGES :: 1000
 
 Descriptor_Manager :: struct {
@@ -129,7 +131,7 @@ create_descriptors :: proc(
     return
 }
 
-destroy_desriptors :: proc(device: vk.Device, manager: Descriptor_Manager) {
+destroy_descriptors :: proc(device: vk.Device, manager: Descriptor_Manager) {
     vk.DestroyDescriptorPool(device, manager.pool, nil)
     vk.DestroyDescriptorSetLayout(device, manager.layout, nil)
 }
@@ -140,15 +142,20 @@ add_sampled_image :: proc(
     state: Render_State,
     view: vk.ImageView,
 ) {
+    if manager.image_count >= MAX_IMAGES {
+        panic("exceeded max image count")
+    }
 
     image_info: vk.DescriptorImageInfo = {
         imageLayout = .SHADER_READ_ONLY_OPTIMAL,
         imageView   = view,
     }
 
-    for set in manager.sets {
+    writes: [FRAMES_IN_FLIGHT]vk.WriteDescriptorSet
 
-        write: vk.WriteDescriptorSet = {
+    for set, i in manager.sets {
+
+        writes[i] = {
             sType           = .WRITE_DESCRIPTOR_SET,
             dstSet          = set,
             dstBinding      = IMAGE_ARRAY_BINDING,
@@ -158,9 +165,11 @@ add_sampled_image :: proc(
             pImageInfo      = &image_info,
         }
 
-        vk.UpdateDescriptorSets(device, 1, &write, 0, nil)
 
     }
+
+    vk.UpdateDescriptorSets(device, FRAMES_IN_FLIGHT, &writes[0], 0, nil)
+
 
     manager.image_count += 1
 }
@@ -171,14 +180,19 @@ add_sampler :: proc(
     state: Render_State,
     sampler: vk.Sampler,
 ) {
+    if manager.sampler_count >= MAX_SAMPLERS {
+        panic("exceeded max samplers")
+    }
 
     image_info: vk.DescriptorImageInfo = {
         sampler = sampler,
     }
 
-    for &set in manager.sets {
+    writes: [FRAMES_IN_FLIGHT]vk.WriteDescriptorSet
 
-        write: vk.WriteDescriptorSet = {
+    for &set, i in manager.sets {
+
+        writes[i] = {
             sType           = .WRITE_DESCRIPTOR_SET,
             dstSet          = set,
             dstBinding      = SAMPLER_ARRAY_BINDING,
@@ -188,8 +202,9 @@ add_sampler :: proc(
             pImageInfo      = &image_info,
         }
 
-        vk.UpdateDescriptorSets(device, 1, &write, 0, nil)
     }
+
+    vk.UpdateDescriptorSets(device, FRAMES_IN_FLIGHT, &writes[0], 0, nil)
 
     manager.sampler_count += 1
 }

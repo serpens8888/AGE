@@ -31,24 +31,24 @@ Render_State :: struct {
 
 
 
-draw_rectangle :: proc(x, y, w, h: f32, state: ^Render_State) {
+draw_rectangle :: proc(x, y, z, w, h: f32, state: ^Render_State) {
     bl: Vertex = {
-        pos = {x, y, 0},
+        pos = {x, y, z},
         uv  = {1, 0},
     }
 
     tl: Vertex = {
-        pos = {x, y + h, 0},
+        pos = {x, y + h, z},
         uv  = {0, 0},
     }
 
     tr: Vertex = {
-        pos = {x + w, y + h, 0},
+        pos = {x + w, y + h, z},
         uv  = {0, 1},
     }
 
     br: Vertex = {
-        pos = {x + w, y, 0},
+        pos = {x + w, y, z},
         uv  = {1, 1},
     }
 
@@ -184,6 +184,7 @@ begin_rendering :: proc(
     ctx: Context,
     mod: ^Graphics_Module,
     state: ^Render_State,
+    pool: vk.CommandPool,
 ) -> vk.CommandBuffer {
 
     cmd := state.cmds[state.current_frame]
@@ -208,7 +209,7 @@ begin_rendering :: proc(
     )
 
     if (result == .ERROR_OUT_OF_DATE_KHR) {
-        _ = recreate_swapchain(ctx, mod)
+        _ = recreate_swapchain(ctx, mod, pool)
     } else if (result != .SUCCESS && result != .SUBOPTIMAL_KHR) {
         panic("failed to retrieve swapchain image")
     }
@@ -224,37 +225,11 @@ begin_rendering :: proc(
 
     vk.BeginCommandBuffer(cmd, &begin_info)
 
-    image_subresource_range: vk.ImageSubresourceRange = {
-        aspectMask     = {.COLOR},
-        baseMipLevel   = 0,
-        levelCount     = 1,
-        baseArrayLayer = 0,
-        layerCount     = 1,
-    }
 
-    color_barrier: vk.ImageMemoryBarrier = {
-        sType               = .IMAGE_MEMORY_BARRIER,
-        srcAccessMask       = {},
-        dstAccessMask       = {.COLOR_ATTACHMENT_WRITE},
-        oldLayout           = .UNDEFINED,
-        newLayout           = .COLOR_ATTACHMENT_OPTIMAL,
-        srcQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
-        dstQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
-        image               = mod.swapchain.images[state.image_index],
-        subresourceRange    = image_subresource_range,
-    }
-
-    vk.CmdPipelineBarrier(
+    transition_image_layout(
         cmd,
-        {.TOP_OF_PIPE}, // srcStageMask: No prior operations
-        {.COLOR_ATTACHMENT_OUTPUT}, // dstStageMask: Wait for color attachment stage
-        {}, // dependencyFlags
-        0,
-        nil, // memory barriers
-        0,
-        nil, // buffer memory barriers
-        1,
-        &color_barrier, // image memory barriers
+        &mod.swapchain.images[state.image_index],
+        .COLOR_ATTACHMENT_OPTIMAL,
     )
 
     render_area := vk.Rect2D {
@@ -280,11 +255,25 @@ begin_rendering :: proc(
 
     color_attachment := vk.RenderingAttachmentInfo {
         sType       = .RENDERING_ATTACHMENT_INFO,
-        imageView   = mod.swapchain.views[image_index],
+        imageView   = mod.swapchain.images[image_index].view,
         imageLayout = .COLOR_ATTACHMENT_OPTIMAL,
         loadOp      = .CLEAR,
         storeOp     = .STORE,
         clearValue  = clear_color,
+    }
+
+    depth_stencil_clear_value: vk.ClearDepthStencilValue = {
+        depth   = 1.0,
+        stencil = 0,
+    }
+
+    depth_attachment := vk.RenderingAttachmentInfo {
+        sType = .RENDERING_ATTACHMENT_INFO,
+        imageView = mod.depth_stencil_image.view,
+        imageLayout = mod.depth_stencil_image.layout,
+        loadOp = .CLEAR,
+        clearValue = {depthStencil = depth_stencil_clear_value},
+        storeOp = .STORE,
     }
 
     rendering_info := vk.RenderingInfo {
@@ -293,6 +282,7 @@ begin_rendering :: proc(
         layerCount           = 1,
         colorAttachmentCount = 1,
         pColorAttachments    = &color_attachment,
+        pDepthAttachment     = &depth_attachment,
     }
 
     vk.CmdBeginRendering(cmd, &rendering_info)
@@ -308,42 +298,16 @@ end_rendering :: proc(
     ctx: Context,
     mod: ^Graphics_Module,
     state: ^Render_State,
+    pool: vk.CommandPool,
 ) {
     cmd := state.cmds[state.current_frame]
 
     vk.CmdEndRendering(cmd)
 
-    image_subresource_range: vk.ImageSubresourceRange = {
-        aspectMask     = {.COLOR},
-        baseMipLevel   = 0,
-        levelCount     = 1,
-        baseArrayLayer = 0,
-        layerCount     = 1,
-    }
-
-    present_barrier: vk.ImageMemoryBarrier = {
-        sType               = .IMAGE_MEMORY_BARRIER,
-        srcAccessMask       = {.COLOR_ATTACHMENT_WRITE},
-        dstAccessMask       = {.MEMORY_READ},
-        oldLayout           = .COLOR_ATTACHMENT_OPTIMAL,
-        newLayout           = .PRESENT_SRC_KHR,
-        srcQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
-        dstQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
-        image               = mod.swapchain.images[state.image_index],
-        subresourceRange    = image_subresource_range,
-    }
-
-    vk.CmdPipelineBarrier(
+    transition_image_layout(
         cmd,
-        {.COLOR_ATTACHMENT_OUTPUT},
-        {.BOTTOM_OF_PIPE},
-        {},
-        0,
-        nil,
-        0,
-        nil,
-        1,
-        &present_barrier,
+        &mod.swapchain.images[state.image_index],
+        .PRESENT_SRC_KHR,
     )
 
 
@@ -377,7 +341,7 @@ end_rendering :: proc(
     }
     result := vk.QueuePresentKHR(ctx.queue.handle, &present_info)
     if (result == .ERROR_OUT_OF_DATE_KHR || result == .SUBOPTIMAL_KHR) {
-        _ = recreate_swapchain(ctx, mod)
+        _ = recreate_swapchain(ctx, mod, pool)
     } else if (result != .SUCCESS) {
         panic("failed to present swapchain image")
     }

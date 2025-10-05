@@ -26,28 +26,27 @@ main :: proc() {
 
     descriptors, desc_err := vulk.create_descriptors(ctx.device)
     fmt.println(desc_err)
-    defer vulk.destroy_desriptors(ctx.device, descriptors)
+    defer vulk.destroy_descriptors(ctx.device, descriptors)
 
     pool: vk.CommandPool
-
     pool_info: vk.CommandPoolCreateInfo = {
         sType            = .COMMAND_POOL_CREATE_INFO,
         queueFamilyIndex = ctx.queue.family,
         flags            = {.RESET_COMMAND_BUFFER},
     }
-
     vk.CreateCommandPool(ctx.device, &pool_info, nil, &pool)
     defer vk.DestroyCommandPool(ctx.device, pool, nil)
 
     mod, gfx_err := vulk.create_graphics_module(
-        &ctx,
+        ctx,
+        pool,
         "foo",
         1280,
         720,
         {.RESIZABLE, .VULKAN},
     )
 
-    defer vulk.destroy_graphics_module(&ctx, &mod)
+    defer vulk.destroy_graphics_module(ctx, &mod)
 
     range: vk.PushConstantRange = {
         stageFlags = {.VERTEX, .FRAGMENT},
@@ -86,7 +85,7 @@ main :: proc() {
     defer vulk.destroy_render_state(ctx, &state)
 
 
-    image, image_err := vulk.create_image(
+    image, image_err := vulk.create_texture(
         "assets/images/monkey_think.png",
         ctx,
         pool,
@@ -128,7 +127,7 @@ main :: proc() {
 
         mem.copy(uniform_buffer.mapped_ptr, &col, size_of(vulk.Color))
 
-        cmd := vulk.begin_rendering(ctx, &mod, &state)
+        cmd := vulk.begin_rendering(ctx, &mod, &state, pool)
 
         vk.CmdPushConstants(
             cmd,
@@ -155,13 +154,30 @@ main :: proc() {
         vulk.draw_rectangle(
             -abs(sin) / 2,
             -abs(sin) / 2,
+            0.8,
             abs(sin),
             abs(sin),
             &state,
         )
+        vulk.draw_rectangle(
+            -abs(sin) / 4,
+            -abs(sin) / 4,
+            0.5,
+            abs(sin) / 2,
+            abs(sin) / 2,
+            &state,
+        )
+        vulk.draw_rectangle(
+            -abs(sin) / 8,
+            -abs(sin) / 8,
+            0.3,
+            abs(sin) / 4,
+            abs(sin) / 4,
+            &state,
+        )
         vulk.draw_batch(&state)
 
-        vulk.end_rendering(ctx, &mod, &state)
+        vulk.end_rendering(ctx, &mod, &state, pool)
 
     }
 

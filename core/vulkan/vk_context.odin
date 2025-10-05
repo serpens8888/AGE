@@ -19,12 +19,6 @@ Context :: struct {
     queue:           GPU_Queue, //the general purpose gpu_queue
 }
 
-Graphics_Module :: struct {
-    window:    ^sdl.Window,
-    surface:   vk.SurfaceKHR,
-    swapchain: Swapchain,
-}
-
 
 device_extensions: []cstring : {"VK_KHR_swapchain"}
 
@@ -162,32 +156,5 @@ create_context_allocator :: proc(ctx: ^Context) -> Error {
 
     return nil
 
-}
-
-create_graphics_module :: proc(
-    ctx: ^Context,
-    window_name: cstring,
-    w, h: i32,
-    flags: sdl.WindowFlags,
-) -> (
-    mod: Graphics_Module,
-    err: Error,
-) {
-    mod.window = create_window("foo", w, h, flags + {.VULKAN}) or_return
-    mod.surface = create_surface(mod.window, ctx.instance) or_return
-    mod.swapchain = create_swapchain(
-        ctx.device,
-        ctx.gpu,
-        mod.surface,
-        mod.window,
-    ) or_return
-
-    return
-}
-
-destroy_graphics_module :: proc(ctx: ^Context, mod: ^Graphics_Module) {
-    destroy_swapchain(ctx.device, &mod.swapchain)
-    vk.DestroySurfaceKHR(ctx.instance, mod.surface, nil)
-    sdl.DestroyWindow(mod.window)
 }
 

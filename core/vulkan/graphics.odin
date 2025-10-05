@@ -7,13 +7,60 @@ import sdl "vendor:sdl3"
 import vk "vendor:vulkan"
 import "vma"
 
+Graphics_Module :: struct {
+    window:              ^sdl.Window,
+    surface:             vk.SurfaceKHR,
+    swapchain:           Swapchain,
+    depth_stencil_image: Allocated_Image,
+}
+
 Swapchain :: struct {
     handle: vk.SwapchainKHR, //handle to swapchain
-    images: []vk.Image, //the swapchains images
-    views:  []vk.ImageView, //images views of the swapchains images
+    images: []Allocated_Image, //the swapchains images
     format: vk.Format, //the formap of the swapchain images
     extent: vk.Extent2D, //the extent of the swapchain images
 }
+
+
+create_graphics_module :: proc(
+    ctx: Context,
+    pool: vk.CommandPool,
+    window_name: cstring,
+    w, h: i32,
+    flags: sdl.WindowFlags,
+) -> (
+    mod: Graphics_Module,
+    err: Error,
+) {
+    mod.window = create_window("foo", w, h, flags + {.VULKAN}) or_return
+
+    mod.surface = create_surface(mod.window, ctx.instance) or_return
+
+    mod.swapchain = create_swapchain(
+        ctx.device,
+        ctx.gpu,
+        mod.surface,
+        mod.window,
+    ) or_return
+
+    mod.depth_stencil_image = create_depth_stencil_image(
+        ctx,
+        pool,
+        mod.swapchain.extent,
+    ) or_return
+
+    return
+}
+
+destroy_graphics_module :: proc(ctx: Context, mod: ^Graphics_Module) {
+    destroy_swapchain(ctx.device, &mod.swapchain)
+    vk.DestroySurfaceKHR(ctx.instance, mod.surface, nil)
+    sdl.DestroyWindow(mod.window)
+    destroy_image(ctx, mod.depth_stencil_image)
+}
+
+
+
 
 create_window :: proc(
     name: cstring,
@@ -128,21 +175,25 @@ create_swapchain :: proc(
     ) or_return
 
     vk.GetSwapchainImagesKHR(device, swapchain.handle, &image_count, nil)
-    swapchain.images = make([]vk.Image, image_count) or_return
+
+    swapchain_images := make([]vk.Image, image_count) or_return
+    defer delete(swapchain_images)
+
     vk.GetSwapchainImagesKHR(
         device,
         swapchain.handle,
         &image_count,
-        raw_data(swapchain.images),
+        raw_data(swapchain_images),
     )
 
 
-    swapchain.views = make([]vk.ImageView, image_count) or_return
+    swapchain_views := make([]vk.ImageView, image_count) or_return
+    defer delete(swapchain_views)
 
-    for &view, i in swapchain.views {
+    for &view, i in swapchain_views {
         view = create_image_view(
             device,
-            swapchain.images[i],
+            swapchain_images[i],
             format.format,
         ) or_return
     }
@@ -150,7 +201,19 @@ create_swapchain :: proc(
     swapchain.extent = extent
     swapchain.format = format.format
 
+    swapchain.images = make([]Allocated_Image, image_count)
 
+    for &image, i in swapchain.images {
+        image = {
+            handle = swapchain_images[i],
+            view   = swapchain_views[i],
+            extent = {swapchain.extent.width, swapchain.extent.height, 0},
+            format = swapchain.format,
+            layout = .UNDEFINED,
+            mips   = 1,
+            aspect = {.COLOR},
+        }
+    }
 
     return
 }
@@ -252,17 +315,20 @@ get_swapchain_extent :: proc(
 }
 
 destroy_swapchain :: proc(device: vk.Device, swapchain: ^Swapchain) {
-    vk.DestroySwapchainKHR(device, swapchain.handle, nil)
-    for view in swapchain.views {
-        vk.DestroyImageView(device, view, nil)
+    for image in swapchain.images {
+        vk.DestroyImageView(device, image.view, nil)
     }
-    delete(swapchain.views)
+    vk.DestroySwapchainKHR(device, swapchain.handle, nil)
     delete(swapchain.images)
 }
 
 
 @(require_results)
-recreate_swapchain :: proc(ctx: Context, mod: ^Graphics_Module) -> Error {
+recreate_swapchain :: proc(
+    ctx: Context,
+    mod: ^Graphics_Module,
+    pool: vk.CommandPool,
+) -> Error {
     event: sdl.Event
     w: i32 = 0
     h: i32 = 0
@@ -297,7 +363,79 @@ recreate_swapchain :: proc(ctx: Context, mod: ^Graphics_Module) -> Error {
 
     destroy_swapchain(ctx.device, &old_swapchain)
 
+    destroy_image(ctx, mod.depth_stencil_image)
+
+    mod.depth_stencil_image = create_depth_stencil_image(
+        ctx,
+        pool,
+        {mod.swapchain.extent.width, mod.swapchain.extent.height},
+    ) or_return
+
     return nil
 
+}
+
+
+create_depth_stencil_image :: proc(
+    ctx: Context,
+    pool: vk.CommandPool,
+    extent: vk.Extent2D,
+) -> (
+    image: Allocated_Image,
+    err: Error,
+) {
+
+    properties: vk.FormatProperties
+
+    vk.GetPhysicalDeviceFormatProperties(
+        ctx.gpu,
+        vk.Format.D24_UNORM_S8_UINT,
+        &properties,
+    )
+
+    d24s8 := .DEPTH_STENCIL_ATTACHMENT in properties.optimalTilingFeatures
+
+    vk.GetPhysicalDeviceFormatProperties(
+        ctx.gpu,
+        vk.Format.D32_SFLOAT_S8_UINT,
+        &properties,
+    )
+
+    d32s8 := .DEPTH_STENCIL_ATTACHMENT in properties.optimalTilingFeatures
+
+    ensure(d32s8 | d24s8)
+
+    format: vk.Format
+    format = .D32_SFLOAT_S8_UINT if d32s8 else .D24_UNORM_S8_UINT
+
+    image = allocate_image(
+        ctx.allocator,
+        extent.width,
+        extent.height,
+        format,
+        {.DEPTH_STENCIL_ATTACHMENT, .TRANSFER_DST},
+        1,
+        {.DEPTH, .STENCIL},
+    ) or_return
+
+    image.view = create_image_view(
+        ctx.device,
+        image.handle,
+        format,
+        subresource_range = vk.ImageSubresourceRange {
+            {.DEPTH, .STENCIL},
+            0,
+            1,
+            0,
+            1,
+        },
+    ) or_return
+
+    cmd := begin_single_time_cmd(ctx.device, pool) or_return
+    transition_image_layout(cmd, &image, .DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+    submit_single_time_cmd(ctx.device, pool, ctx.queue.handle, &cmd) or_return
+
+
+    return
 }
 

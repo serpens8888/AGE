@@ -17,6 +17,8 @@ Allocated_Image :: struct {
     extent:     vk.Extent3D, //image extent
     format:     vk.Format, //format of the image
     layout:     vk.ImageLayout,
+    mips:       u32,
+    aspect:     vk.ImageAspectFlags,
 }
 
 fallback_image: image.Image = {
@@ -52,7 +54,7 @@ fallback_pixels: []u8 = {
 // odinfmt: enable
 
 @(require_results)
-create_image :: proc(
+create_texture :: proc(
     file: string,
     ctx: Context,
     pool: vk.CommandPool,
@@ -100,6 +102,82 @@ create_image :: proc(
         samples = {._1}, //texture images have 1 sample per pixel
     }
 
+    img.format = ici.format
+    img.extent = ici.extent
+    img.mips = 1
+    img.aspect = {.COLOR}
+
+    aci: vma.Allocation_Create_Info = {
+        flags          = {
+            .Strategy_Min_Time,
+            .Strategy_Min_Memory,
+            .Strategy_Min_Offset,
+        },
+        usage          = .Auto,
+        required_flags = {.DEVICE_LOCAL},
+    }
+
+    vma.create_image(
+        ctx.allocator,
+        ici,
+        aci,
+        &img.handle,
+        &img.allocation,
+        &img.alloc_info,
+    ) or_return
+
+    cmd := begin_single_time_cmd(ctx.device, pool) or_return
+
+    transition_image_layout(cmd, &img, .TRANSFER_DST_OPTIMAL)
+
+    copy_buffer_to_image(
+        cmd,
+        staging,
+        img.handle,
+        ici.extent.width,
+        ici.extent.height,
+    )
+
+    transition_image_layout(cmd, &img, .SHADER_READ_ONLY_OPTIMAL)
+
+    submit_single_time_cmd(ctx.device, pool, ctx.queue.handle, &cmd) or_return
+
+    img.view = create_image_view(ctx.device, img.handle, ici.format) or_return
+
+
+    return
+}
+
+destroy_image :: proc(ctx: Context, img: Allocated_Image) {
+    vk.DestroyImageView(ctx.device, img.view, nil)
+    vma.destroy_image(ctx.allocator, img.handle, img.allocation)
+}
+
+allocate_image :: proc(
+    allocator: vma.Allocator,
+    w, h: u32,
+    format: vk.Format,
+    usage: vk.ImageUsageFlags,
+    mips: u32,
+    aspect: vk.ImageAspectFlags,
+) -> (
+    img: Allocated_Image,
+    err: Error,
+) {
+    ici: vk.ImageCreateInfo = {
+        sType = .IMAGE_CREATE_INFO,
+        imageType = .D2,
+        extent = {width = w, height = h, depth = 1},
+        mipLevels = mips,
+        arrayLayers = 1,
+        format = format,
+        tiling = .OPTIMAL,
+        initialLayout = .UNDEFINED,
+        usage = usage,
+        sharingMode = .EXCLUSIVE,
+        samples = {._1}, //texture images have 1 sample per pixel
+    }
+
     aci: vma.Allocation_Create_Info = {
         flags          = {
             .Strategy_Min_Time,
@@ -115,61 +193,26 @@ create_image :: proc(
     alloc_info: vma.Allocation_Info
 
     vma.create_image(
-        ctx.allocator,
+        allocator,
         ici,
         aci,
         &handle,
         &allocation,
         &alloc_info,
-    )
-    cmd := begin_single_time_cmd(ctx.device, pool) or_return
+    ) or_return
 
-    transition_image_layout(
-        cmd,
-        handle,
-        ici.format,
-        .UNDEFINED,
-        .TRANSFER_DST_OPTIMAL,
-    )
+    img = {
+        handle     = handle,
+        allocation = allocation,
+        alloc_info = alloc_info,
+        extent     = ici.extent,
+        format     = format,
+        layout     = ici.initialLayout,
+        mips       = mips,
+        aspect     = aspect,
+    }
 
-    copy_buffer_to_image(
-        cmd,
-        staging,
-        handle,
-        ici.extent.width,
-        ici.extent.height,
-    )
-
-    transition_image_layout(
-        cmd,
-        handle,
-        ici.format,
-        .TRANSFER_DST_OPTIMAL,
-        .SHADER_READ_ONLY_OPTIMAL,
-    )
-
-    submit_single_time_cmd(ctx.device, pool, ctx.queue.handle, &cmd) or_return
-
-    view := create_image_view(ctx.device, handle, ici.format) or_return
-
-
-
-    return {
-            handle,
-            allocation,
-            alloc_info,
-            view,
-            ici.extent,
-            ici.format,
-            .SHADER_READ_ONLY_OPTIMAL,
-        },
-        nil
-
-}
-
-destroy_image :: proc(ctx: Context, img: Allocated_Image) {
-    vk.DestroyImageView(ctx.device, img.view, nil)
-    vma.destroy_image(ctx.allocator, img.handle, img.allocation)
+    return
 }
 
 find_format :: proc(img: image.Image) -> vk.Format {
@@ -195,13 +238,12 @@ find_format :: proc(img: image.Image) -> vk.Format {
 
 transition_image_layout :: proc(
     cmd: vk.CommandBuffer,
-    image: vk.Image,
-    format: vk.Format,
-    old_layout, new_layout: vk.ImageLayout,
+    image: ^Allocated_Image,
+    new_layout: vk.ImageLayout,
 ) {
 
     subresource_range: vk.ImageSubresourceRange = {
-        aspectMask     = {.COLOR},
+        aspectMask     = image.aspect,
         baseMipLevel   = 0,
         levelCount     = 1,
         baseArrayLayer = 0,
@@ -212,9 +254,9 @@ transition_image_layout :: proc(
         sType               = .IMAGE_MEMORY_BARRIER,
         srcQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
         dstQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
-        oldLayout           = old_layout,
+        oldLayout           = image.layout,
         newLayout           = new_layout,
-        image               = image,
+        image               = image.handle,
         subresourceRange    = subresource_range,
     }
 
@@ -224,7 +266,7 @@ transition_image_layout :: proc(
     dst_access: vk.AccessFlags
 
     // Source layout transitions (what the image was last used for)
-    #partial switch old_layout {
+    #partial switch image.layout {
     case .UNDEFINED:
         src_access = {}
         src_stage = {.TOP_OF_PIPE}
@@ -246,6 +288,9 @@ transition_image_layout :: proc(
     case .DEPTH_STENCIL_READ_ONLY_OPTIMAL:
         src_access = {.DEPTH_STENCIL_ATTACHMENT_READ}
         src_stage = {.EARLY_FRAGMENT_TESTS, .LATE_FRAGMENT_TESTS}
+    case .PRESENT_SRC_KHR:
+        src_access = {}
+        src_stage = {.BOTTOM_OF_PIPE}
     }
 
     // Destination layout transitions (what the image will be used for next)
@@ -272,6 +317,9 @@ transition_image_layout :: proc(
     case .DEPTH_STENCIL_READ_ONLY_OPTIMAL:
         dst_access = {.DEPTH_STENCIL_ATTACHMENT_READ}
         dst_stage = {.EARLY_FRAGMENT_TESTS, .LATE_FRAGMENT_TESTS}
+    case .PRESENT_SRC_KHR:
+        dst_access = {}
+        dst_stage = {.BOTTOM_OF_PIPE}
     }
 
     barrier.srcAccessMask = src_access
@@ -292,6 +340,8 @@ transition_image_layout :: proc(
         1,
         &barrier,
     )
+
+    image.layout = new_layout
 }
 
 copy_buffer_to_image :: proc(
@@ -361,8 +411,8 @@ create_sampler :: proc(ctx: Context) -> (sampler: vk.Sampler, err: Error) {
 
     si: vk.SamplerCreateInfo = {
         sType                   = .SAMPLER_CREATE_INFO,
-        magFilter               = .NEAREST,
-        minFilter               = .NEAREST,
+        magFilter               = .LINEAR,
+        minFilter               = .LINEAR,
         addressModeU            = .REPEAT,
         addressModeV            = .REPEAT,
         addressModeW            = .REPEAT,

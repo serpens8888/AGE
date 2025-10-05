@@ -130,11 +130,15 @@ create_graphics_pipeline :: proc(
 
     depth_stencil: vk.PipelineDepthStencilStateCreateInfo = {
         sType                 = .PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-        depthTestEnable       = false,
-        depthWriteEnable      = false,
+        depthTestEnable       = true,
+        depthWriteEnable      = true,
         depthCompareOp        = .LESS,
         depthBoundsTestEnable = false,
+        minDepthBounds        = 0.0,
+        maxDepthBounds        = 1.0,
         stencilTestEnable     = false,
+        front                 = {},
+        back                  = {},
     }
 
     attachment: vk.PipelineColorBlendAttachmentState = {
@@ -171,6 +175,7 @@ create_graphics_pipeline :: proc(
         sType                   = .PIPELINE_RENDERING_CREATE_INFO,
         colorAttachmentCount    = 1,
         pColorAttachmentFormats = &color_format,
+        depthAttachmentFormat   = graphics_mod.depth_stencil_image.format,
     }
 
 
