@@ -51,7 +51,7 @@ main :: proc() {
     range: vk.PushConstantRange = {
         stageFlags = {.VERTEX, .FRAGMENT},
         offset     = 0,
-        size       = size_of(vulk.Push_Constant_Data),
+        size       = size_of(f32) * 3,
     }
 
     uniform_buffer, uniform_err := vulk.create_uniform_buffer(
@@ -86,7 +86,7 @@ main :: proc() {
 
 
     image, image_err := vulk.create_texture(
-        "assets/images/monkey_think.png",
+        "assets/images/speed.png",
         ctx,
         pool,
     )

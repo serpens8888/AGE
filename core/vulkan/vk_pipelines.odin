@@ -4,10 +4,6 @@ import "core:os"
 import vk "vendor:vulkan"
 import "vma"
 
-Push_Constant_Data :: struct {
-    color: vk.DeviceAddress, //8 byte pointer to a Color
-}
-
 create_shader_module :: proc(
     device: vk.Device,
     shader_path: string,
@@ -65,8 +61,8 @@ create_graphics_pipeline :: proc(
     vertex_attruibutes: []vk.VertexInputAttributeDescription = {
         get_pos_attr_desc(),
         get_norm_attr_desc(),
-        get_col_attr_desc(),
         get_uv_attr_desc(),
+        get_mat_attr_desc(),
     }
 
     vertex_input: vk.PipelineVertexInputStateCreateInfo = {

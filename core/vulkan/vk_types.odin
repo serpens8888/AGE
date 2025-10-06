@@ -26,10 +26,10 @@ Vulk_Error :: enum {
 */
 
 Vertex :: struct {
-    pos:    [3]f32,
-    normal: [3]f32,
-    col:    [3]f32,
-    uv:     [2]f32,
+    pos:      [3]f32,
+    normal:   [3]f32,
+    uv:       [2]f32,
+    material: u32, //index
 }
 
 Index :: distinct u32
@@ -60,21 +60,21 @@ get_norm_attr_desc :: proc() -> vk.VertexInputAttributeDescription {
     }
 }
 
-get_col_attr_desc :: proc() -> vk.VertexInputAttributeDescription {
-    return {
-        binding = 0,
-        location = 2,
-        format = .R32G32B32_SFLOAT,
-        offset = u32(offset_of(Vertex, col)),
-    }
-}
-
 get_uv_attr_desc :: proc() -> vk.VertexInputAttributeDescription {
     return {
         binding = 0,
-        location = 3,
+        location = 2,
         format = .R32G32_SFLOAT,
         offset = u32(offset_of(Vertex, uv)),
+    }
+}
+
+get_mat_attr_desc :: proc() -> vk.VertexInputAttributeDescription {
+    return {
+        binding = 0,
+        location = 3,
+        format = .R32G32B32_SFLOAT,
+        offset = u32(offset_of(Vertex, material)),
     }
 }
 
