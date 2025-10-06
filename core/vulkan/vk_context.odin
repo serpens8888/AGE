@@ -24,7 +24,7 @@ device_extensions: []cstring : {"VK_KHR_swapchain"}
 
 //ORDER IS VERY IMPORTANT
 @(require_results)
-init_context :: proc(ctx: ^Context) -> (err: Error) {
+create_context :: proc() -> (ctx: Context, err: Error) {
     ctx.instance = create_instance() or_return
 
     vk.load_proc_addresses(ctx.instance) //load in all the functions for creating the device
@@ -38,17 +38,18 @@ init_context :: proc(ctx: ^Context) -> (err: Error) {
     vk.GetPhysicalDeviceProperties(ctx.gpu, &ctx.gpu_properties)
 
     gpu_queues := enumerate_queues(ctx.gpu) or_return
+    defer delete(gpu_queues)
 
     select_context_queue(&gpu_queues)
 
-    create_context_device(ctx) or_return
+    create_context_device(&ctx) or_return
 
-    create_context_queue(ctx, ctx.queue)
+    create_context_queue(&ctx, ctx.queue)
 
 
     vk.load_proc_addresses(ctx.device) //load in the rest of the functions
 
-    create_context_allocator(ctx)
+    create_context_allocator(&ctx)
 
     return
 }

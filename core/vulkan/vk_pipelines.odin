@@ -4,6 +4,42 @@ import "core:os"
 import vk "vendor:vulkan"
 import "vma"
 
+Pipeline :: struct {
+    handle:        vk.Pipeline,
+    layout:        vk.PipelineLayout,
+    shader_module: vk.ShaderModule,
+}
+
+@(require_results)
+create_pipeline :: proc(
+    ctx: Context,
+    mod: Graphics_Module,
+    layouts: []vk.DescriptorSetLayout,
+    ranges: []vk.PushConstantRange,
+    shader_path: string,
+) -> (
+    pl: Pipeline,
+    err: Error,
+) {
+    pl.shader_module = create_shader_module(ctx.device, shader_path) or_return
+    pl.layout = create_pipeline_layout(ctx.device, layouts, ranges) or_return
+    pl.handle = create_graphics_pipeline(
+        ctx.device,
+        mod,
+        pl.layout,
+        pl.shader_module,
+    ) or_return
+
+    return
+}
+
+destroy_pipeline :: proc(ctx: Context, pl: Pipeline) {
+    vk.DestroyShaderModule(ctx.device, pl.shader_module, nil)
+    vk.DestroyPipelineLayout(ctx.device, pl.layout, nil)
+    vk.DestroyPipeline(ctx.device, pl.handle, nil)
+}
+
+@(require_results)
 create_shader_module :: proc(
     device: vk.Device,
     shader_path: string,
@@ -29,6 +65,7 @@ create_shader_module :: proc(
 
 
 
+@(require_results)
 create_graphics_pipeline :: proc(
     device: vk.Device,
     graphics_mod: Graphics_Module,

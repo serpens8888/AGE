@@ -32,32 +32,34 @@ Render_State :: struct {
 
 
 draw_rectangle :: proc(x, y, z, w, h: f32, state: ^Render_State) {
-    bl: Vertex = {
-        pos = {x, y, z},
-        uv  = {1, 0},
-    }
-
     tl: Vertex = {
-        pos = {x, y + h, z},
+        pos = {x, y, z},
         uv  = {0, 0},
     }
 
-    tr: Vertex = {
-        pos = {x + w, y + h, z},
+    bl: Vertex = {
+        pos = {x, y + h, z},
         uv  = {0, 1},
     }
 
-    br: Vertex = {
+    tr: Vertex = {
         pos = {x + w, y, z},
+        uv  = {1, 0},
+    }
+
+    br: Vertex = {
+        pos = {x + w, y + h, z},
         uv  = {1, 1},
     }
+
+
 
     assert(
         write_verts(
             state.verts,
             state.scratch_allocator,
             uintptr(state.vert_offset * size_of(Vertex)),
-            {bl, tl, tr, br},
+            {tl, bl, br, tr},
         ) ==
         nil,
     )

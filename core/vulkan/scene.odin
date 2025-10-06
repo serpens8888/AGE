@@ -15,8 +15,8 @@ Mat4 :: linalg.Matrix4f32
 
 //128 byte max
 Push_Constants :: struct #packed {
-    vp_matrix:    vk.DeviceAddress, //8 bytes, ptr to 64 byte mat4
-    per_obj_data: vk.DeviceAddress, //8 bytes, ptr to per object data
+    vp_matrix:    vk.DeviceAddress, //8 bytes, updated per frame
+    per_obj_data: vk.DeviceAddress, //8 bytes, updated per opject
 }
 
 Per_Object_Data :: struct {
@@ -37,6 +37,7 @@ Entity :: struct {
     model:        Mat4,
     model_buffer: Allocated_Buffer,
 }
+
 
 Camera :: struct {
     position:  Vec3,
@@ -80,6 +81,10 @@ create_camera :: proc(
     mem.copy(c.vp_buffer.mapped_ptr, &vp, size_of(Mat4))
 
     return
+}
+
+destroy_camera :: proc(ctx: Context, c: Camera) {
+    free_buffer(ctx.allocator, c.vp_buffer)
 }
 
 update_camera :: proc(c: ^Camera) {
@@ -229,6 +234,13 @@ update_entity :: proc(e: ^Entity, pos: Vec3, rot: quaternion128, scale: Vec3) {
 
     mem.copy(e.model_buffer.mapped_ptr, &e.model, size_of(Mat4))
 }
+
+destroy_entity :: proc(ctx: Context, e: Entity) {
+    free_buffer(ctx.allocator, e.mesh.vertex_buffer)
+    free_buffer(ctx.allocator, e.mesh.index_buffer)
+    free_buffer(ctx.allocator, e.model_buffer)
+}
+
 
 calculate_model :: proc(pos: Vec3, rot: quaternion128, scale: Vec3) -> Mat4 {
     t := linalg.matrix4_translate(pos)

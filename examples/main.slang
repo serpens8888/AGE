@@ -1,40 +1,29 @@
 
-
-#define ALIGN(size,alignment) (size + alignment - 1) & ~(alignment-1)
-
-
-
-
-struct Input{
-    int32_t buf[10000];
+struct v_in{
+	[vk_location(0)] float3 pos;
+	[vk_location(1)] float3 normal;
+	[vk_location(2)] float2 uv;
+    [vk_location(3)] uint32_t material;
 };
 
-struct Output{
-    int32_t buf[10];
+struct v_out{
+    float4 position : SV_Position;
+    float2 uv;
 };
 
-groupshared int32_t shared_memory[1024];
 
-[shader("compute")]
-[numthreads(1024, 1, 1)]
-void reduce(uint3 id : SV_DispatchThreadID, uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID, Output* out, Input* in){
+[shader("vertex")]
+v_out vertexMain(v_in input, uint id : SV_VertexID){
+    v_out out;
+    out.position = float4(input.pos, 1.0);
+    out.uv = input.uv;
+    return out;
+}
 
-    if(id.x < 10000){
-        shared_memory[gtid.x] = in.buf[id.x];
-    } else{
-        shared_memory[gtid.x] = 0;
-    }
 
-    GroupMemoryBarrierWithGroupSync();
-
-    for(uint offset = 512; offset > 0; offset >>= 1){
-        if(gtid.x < offset){
-            shared_memory[gtid.x] += shared_memory[gtid.x+offset];
-        }
-        GroupMemoryBarrierWithGroupSync();
-    }
-    
-    out.buf[gid.x] = shared_memory[0];
+[shader("fragment")]
+float4 fragmentMain(v_out input) : SV_Target{
+    return  float4(input.uv, 0.0, 1.0);
 }
 
 
@@ -48,28 +37,3 @@ void reduce(uint3 id : SV_DispatchThreadID, uint3 gid : SV_GroupID, uint3 gtid :
 
 
 
-
-
-
-
-
-
-
-
-
-/*
-struct Input{
-    float[8] buf;
-};
-
-struct Output{
-    float[8] buf;
-};
-
-[shader("compute")]
-[numthreads(8, 1, 1)]
-void reverseArray(uint3 id : SV_DispatchThreadID, Output* out, Input* in){
-    out.buf[id.x] = in.buf[7-id.x];
-
-}
-*/
