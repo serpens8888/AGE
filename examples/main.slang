@@ -12,10 +12,11 @@ struct v_out{
 };
 
 
+
 [shader("vertex")]
-v_out vertexMain(v_in input, uint id : SV_VertexID){
+v_out vertexMain(v_in input, float4x4* vp, float4x4* m){
     v_out out;
-    out.position = float4(input.pos, 1.0);
+    out.position = mul(*vp,mul(*m, float4(input.pos, 1.0)));
     out.uv = input.uv;
     return out;
 }

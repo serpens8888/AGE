@@ -1,5 +1,6 @@
 package vulk
 
+import "core:fmt"
 import "core:math"
 import "core:math/linalg"
 import "core:mem"
@@ -15,17 +16,14 @@ Mat4 :: linalg.Matrix4f32
 
 //128 byte max
 Push_Constants :: struct #packed {
-    vp_matrix:    vk.DeviceAddress, //8 bytes, updated per frame
-    per_obj_data: vk.DeviceAddress, //8 bytes, updated per opject
-}
-
-Per_Object_Data :: struct {
-    model_matrix: Mat4,
+    vp_matrix: vk.DeviceAddress, //8 bytes, updated per frame
+    m_matrix:  vk.DeviceAddress, //8 bytes, updated per opject
 }
 
 Mesh :: struct {
     vertex_buffer: Allocated_Buffer,
     index_buffer:  Allocated_Buffer,
+    index_count:   u32,
 }
 
 Entity :: struct {
@@ -51,6 +49,51 @@ Camera :: struct {
     vp_buffer: Allocated_Buffer,
 }
 
+create_push_constants :: proc() -> (pcr: vk.PushConstantRange) {
+    return {stageFlags = {.VERTEX}, size = size_of(Push_Constants), offset = 0}
+}
+
+push_camera :: proc(cmd: vk.CommandBuffer, pl: Pipeline, c: ^Camera) {
+    vk.CmdPushConstants(
+        cmd,
+        pl.layout,
+        {.VERTEX},
+        u32(offset_of(Push_Constants, vp_matrix)),
+        size_of(vk.DeviceAddress),
+        &c.vp_buffer.address,
+    )
+}
+
+
+push_entity :: proc(cmd: vk.CommandBuffer, pl: Pipeline, e: ^Entity) {
+    vk.CmdPushConstants(
+        cmd,
+        pl.layout,
+        {.VERTEX},
+        u32(offset_of(Push_Constants, m_matrix)),
+        size_of(vk.DeviceAddress),
+        &e.model_buffer.address,
+    )
+
+}
+
+render_entity :: proc(cmd: vk.CommandBuffer, pl: Pipeline, e: ^Entity) {
+
+    push_entity(cmd, pl, e)
+
+    offsets: []vk.DeviceSize = {0}
+    vk.CmdBindVertexBuffers(
+        cmd,
+        0,
+        1,
+        &e.mesh.vertex_buffer.handle,
+        raw_data(offsets),
+    )
+    vk.CmdBindIndexBuffer(cmd, e.mesh.index_buffer.handle, 0, .UINT32)
+    vk.CmdDrawIndexed(cmd, e.mesh.index_count, 1, 0, 0, 0)
+
+}
+
 create_camera :: proc(
     ctx: Context,
     pos, dir: Vec3,
@@ -67,8 +110,10 @@ create_camera :: proc(
         near      = near,
         far       = far,
     }
-    calculate_view(&c)
+
+    c.view = linalg.matrix4_look_at(c.position, c.direction, [3]f32{0, 1, 0})
     calculate_perspective(&c)
+
 
     c.vp_buffer = create_uniform_buffer(
         ctx.device,
@@ -88,39 +133,24 @@ destroy_camera :: proc(ctx: Context, c: Camera) {
 }
 
 update_camera :: proc(c: ^Camera) {
-    calculate_view(c)
+
+    c.view = linalg.matrix4_look_at(c.position, c.direction, [3]f32{0, 1, 0})
     calculate_perspective(c)
 
     vp := c.proj * c.view
     mem.copy(c.vp_buffer.mapped_ptr, &vp, size_of(Mat4))
 }
 
-calculate_view :: proc(c: ^Camera) {
-    up: Vec3 = {0, 1, 0}
-    f := linalg.normalize(c.direction - c.position) //forward
-    s := linalg.normalize(linalg.cross(f, up)) //side
-    u := linalg.cross(s, f) //true up
-    
-    //odinfmt: disable
-    c.view = {
-        s.x, s.y, s.z, -linalg.dot(s, c.position),
-        u.x, u.y, u.z, -linalg.dot(u, c.position),
-        -f.x, -f.y, -f.z, linalg.dot(f, c.position),
-        0, 0, 0, 1
-    }
-    //odinfmt: enable
-}
-
 calculate_perspective :: proc(c: ^Camera) {
-    f := 1.0 / math.tan(c.fovy / 2.0)
-
-    
+    f := 1.0 / math.tan(c.fovy * math.PI / 180 * 0.5) // fovy in degrees
+    near := c.near
+    far := c.far
     //odinfmt: disable
-    c.proj ={
-        f/c.aspect, 0, 0, 0,
-        0, f, 0, 0,
-        0, 0, c.far / (c.far - c.near), (-c.near * c.far) / (c.far - c.near),
-        0, 0, 1, 0,
+    c.proj = {
+        f / c.aspect, 0, 0, 0,
+        0, -f, 0, 0, // Negative for Vulkan’s y-down NDC
+        0, 0, -far / (far - near), -(far * near) / (far - near),
+        0, 0, -1, 0,
     }
     //odinfmt: enable
 }
@@ -212,6 +242,7 @@ create_cube :: proc(
             ctx.allocator,
             cube_indices,
         ) or_return,
+        index_count   = u32(len(cube_indices)),
     }
 
     e.model_buffer = create_uniform_buffer(

@@ -203,9 +203,8 @@ create_vertex_buffer :: proc(
         allocator,
         &buffer_info,
         {.VERTEX_BUFFER, .TRANSFER_DST},
-        {.HOST_VISIBLE, .HOST_COHERENT},
+        {.DEVICE_LOCAL},
     ) or_return
-    fmt.eprintln("TODO: make the vertex buffer device local")
 
     copy_buffer(
         device,
@@ -310,7 +309,7 @@ create_index_buffer :: proc(
         allocator,
         &buffer_info,
         {.INDEX_BUFFER, .TRANSFER_DST},
-        {.HOST_VISIBLE, .HOST_COHERENT},
+        {.DEVICE_LOCAL},
     ) or_return
 
     copy_buffer(
